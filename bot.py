@@ -18,6 +18,7 @@ import pytz
 TOKEN = os.environ.get('BOT_TOKEN', "8931616308:AAHwwwjGhxxpM_6S00o1eBshSKT3aTC8iWM")
 ADMIN_ID = int(os.environ.get('ADMIN_ID', 939433537))
 CO_ADMIN_USERNAME = "Prime_Blogs"
+CO_ADMIN_CHAT_ID = 939433537  # Apna chat ID daalein - @userinfobot se lo
 OWNER_UPI = os.environ.get('OWNER_UPI', "8218957984@mbk")
 OWNER_PHONE = os.environ.get('OWNER_PHONE', "8218957984")
 STORE_NAME = "Prime Store"
@@ -565,11 +566,16 @@ def process_reference(message, order_id):
     bot.send_message(ADMIN_ID, admin_msg, reply_markup=markup)
     bot.send_message(ADMIN_ID, f"🔔 NEW PAYMENT!\nRef: {reference}")
     
+    # FIXED: Use Chat ID instead of username
     try:
-        bot.send_message("@Prime_Blogs", admin_msg, reply_markup=markup)
-        bot.send_message("@Prime_Blogs", f"🔔 NEW PAYMENT!\nRef: {reference}")
+        bot.send_message(CO_ADMIN_CHAT_ID, admin_msg, reply_markup=markup)
+        bot.send_message(CO_ADMIN_CHAT_ID, f"🔔 NEW PAYMENT!\nRef: {reference}")
     except:
-        pass
+        try:
+            bot.send_message("@Prime_Blogs", admin_msg, reply_markup=markup)
+            bot.send_message("@Prime_Blogs", f"🔔 NEW PAYMENT!\nRef: {reference}")
+        except:
+            pass
     
     markup_user = telebot.types.InlineKeyboardMarkup()
     markup_user.add(
@@ -745,9 +751,17 @@ def approve_order(call):
         
         delivery_log += f"\nStatus: Delivered Successfully!"
         
-        # Send without Markdown parsing to avoid errors
+        # Send to main admin
         bot.send_message(ADMIN_ID, delivery_log)
-        bot.send_message("@Prime_Blogs", delivery_log)
+        
+        # Send to co-admin using Chat ID (FIXED)
+        try:
+            bot.send_message(CO_ADMIN_CHAT_ID, delivery_log)
+        except:
+            try:
+                bot.send_message("@Prime_Blogs", delivery_log)
+            except:
+                pass
         
         ref_text = f"\nRef: {order_found.get('reference', 'N/A')}" if order_found.get('reference') else ""
         markup_admin = telebot.types.InlineKeyboardMarkup()
@@ -1269,7 +1283,7 @@ print("PRIME STORE BOT")
 print("=" * 50)
 print("Bot is running...")
 print(f"Admin ID: {ADMIN_ID}")
-print(f"Co-Admin: @{CO_ADMIN_USERNAME}")
+print(f"Co-Admin Chat ID: {CO_ADMIN_CHAT_ID}")
 print(f"UPI: {OWNER_UPI}")
 print("=" * 50)
 
