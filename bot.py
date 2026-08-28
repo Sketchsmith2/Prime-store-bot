@@ -12,6 +12,7 @@ import io
 from PIL import Image
 from flask import Flask
 import threading
+import pytz
 
 # ===== CONFIGURATION =====
 TOKEN = os.environ.get('BOT_TOKEN', "8931616308:AAHwwwjGhxxpM_6S00o1eBshSKT3aTC8iWM")
@@ -20,6 +21,12 @@ CO_ADMIN_USERNAME = "Prime_Blogs"
 OWNER_UPI = os.environ.get('OWNER_UPI', "8218957984@mbk")
 OWNER_PHONE = os.environ.get('OWNER_PHONE', "8218957984")
 STORE_NAME = "Prime Store"
+
+# ===== TIME ZONE =====
+IST = pytz.timezone('Asia/Kolkata')
+
+def get_indian_time():
+    return datetime.now(IST).strftime('%d-%m-%Y %I:%M:%S %p')
 
 # ===== FILE PATHS =====
 DATA_FILE = "store_data.json"
@@ -278,7 +285,6 @@ def buy_product(call):
             bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
             return
         
-        # ===== CHECK FOR CUSTOM MESSAGE =====
         if product.get('custom_message'):
             bot.send_message(
                 call.message.chat.id,
@@ -357,19 +363,17 @@ def quantity_selected(call):
             "status": "pending",
             "payment": "unpaid",
             "reference": None,
-            "created_at": str(datetime.now())
+            "created_at": get_indian_time()
         })
         save_orders(orders)
         
         del user_selection[call.from_user.id]
         
-        # ===== DELETE OLD MESSAGE =====
         try:
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except:
             pass
         
-        # ===== QR CODE PEHLE =====
         try:
             qr_bytes = generate_upi_qr(OWNER_UPI, total_price)
             if qr_bytes:
@@ -381,7 +385,6 @@ def quantity_selected(call):
         except Exception as e:
             print(f"QR Error: {e}")
         
-        # ===== PAYMENT DETAILS =====
         payment_msg = (
             f"💳 PAYMENT REQUIRED\n━━━━━━━━━━━━━━\n\n"
             f"🆔 Order: {order_id}\n"
@@ -447,7 +450,7 @@ def cancel_order(call):
         for order in orders['orders']:
             if order['order_id'] == order_id:
                 order['status'] = "cancelled"
-                order['cancelled_at'] = str(datetime.now())
+                order['cancelled_at'] = get_indian_time()
                 break
         save_orders(orders)
         
@@ -544,7 +547,7 @@ def process_reference(message, order_id):
     
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
     markup.add(
-        telebot.types.InlineKeyboardButton("✅ Approve", callback_data=f"approve_{order_id}"),
+        telebot.types.InlineKeyboardButton("✅ Approve & Deliver", callback_data=f"approve_{order_id}"),
         telebot.types.InlineKeyboardButton("❌ Reject", callback_data=f"reject_{order_id}")
     )
     
@@ -556,7 +559,7 @@ def process_reference(message, order_id):
         f"Qty: {order_found.get('quantity', 1)}\n"
         f"Total: ₹{order_found['total']}\n"
         f"Ref: {reference}\n"
-        f"Time: {datetime.now().strftime('%I:%M %p')}"
+        f"Time: {get_indian_time()}"
     )
     
     bot.send_message(ADMIN_ID, admin_msg, reply_markup=markup)
@@ -584,7 +587,7 @@ def process_reference(message, order_id):
         reply_markup=markup_user)
 
 # ============================================================
-# ===== APPROVE / REJECT =====
+# ===== APPROVE / REJECT - FIXED WITH DELIVERY LOG =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
@@ -610,6 +613,10 @@ def approve_order(call):
         
         if order_found['status'] == "delivered":
             bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
+            return
+        
+        if order_found['status'] == "processing":
+            bot.answer_callback_query(call.id, "🔄 Order is already being processed!", show_alert=True)
             return
         
         category = order_found['category']
@@ -640,33 +647,40 @@ def approve_order(call):
             bot.answer_callback_query(call.id, f"❌ Only {stock} available!", show_alert=True)
             return
         
+        # ===== MARK AS PROCESSING =====
+        for order in orders['orders']:
+            if order['order_id'] == order_id:
+                order['status'] = "processing"
+                break
+        save_orders(orders)
+        
+        # ===== REDUCE STOCK =====
         products[product_index]['stock'] = stock - quantity
         
         data['settings']['total_earned'] += order_found['total']
         data['settings']['total_orders'] += 1
         save_data(data)
         
-        for order in orders['orders']:
-            if order['order_id'] == order_id:
-                order['status'] = "delivered"
-                order['delivered_at'] = str(datetime.now())
-                break
-        save_orders(orders)
-        
-        # ===== DELIVER =====
+        # ===== SEND PRODUCTS =====
         product_msg = f"🎉 Order Delivered!\n━━━━━━━━━━━━━━\n\n"
         product_msg += f"Order: {order_id}\n"
         product_msg += f"Product: {product_to_deliver['name']}\n"
         product_msg += f"Quantity: {quantity}\n\n"
         
+        file_sent_count = 0
+        delivered_file_names = []
+        
         if category == "coupon":
             product_msg += f"Coupon Code:\n{product_to_deliver['code']}\n"
             if product_to_deliver.get('expiry'):
                 product_msg += f"Expires: {product_to_deliver['expiry']}\n"
+            file_sent_count = 1
+            delivered_file_names = ["Coupon Code"]
         
         elif category == "json":
             if isinstance(product_to_deliver['data'], list):
                 files_to_send = product_to_deliver['data'][:quantity]
+                
                 for i, file_data in enumerate(files_to_send):
                     file_id = generate_file_id()
                     filename = f"{file_id}_{file_data.get('name', 'file').replace(' ', '_')}.json"
@@ -675,8 +689,12 @@ def approve_order(call):
                         with open(filepath, 'rb') as f:
                             bot.send_document(order_found['user_id'], f, caption=f"📄 {file_data.get('name', f'File {i+1}')}")
                         product_msg += f"✅ File #{i+1} - Sent!\n"
+                        file_sent_count += 1
+                        delivered_file_names.append(file_data.get('name', f'File {i+1}'))
                     except Exception as e:
-                        product_msg += f"⚠️ File #{i+1} - Error\n"
+                        product_msg += f"⚠️ File #{i+1} - Error: {str(e)}\n"
+                
+                product_to_deliver['data'] = product_to_deliver['data'][quantity:]
                 product_msg += f"\n📂 Saved in: json_files/"
             else:
                 for i in range(quantity):
@@ -687,11 +705,21 @@ def approve_order(call):
                         with open(filepath, 'rb') as f:
                             bot.send_document(order_found['user_id'], f, caption=f"📄 {product_to_deliver['name']} #{i+1}")
                         product_msg += f"✅ File #{i+1} - Sent!\n"
+                        file_sent_count += 1
+                        delivered_file_names.append(f"{product_to_deliver['name']} #{i+1}")
                     except Exception as e:
-                        product_msg += f"⚠️ File #{i+1} - Error\n"
+                        product_msg += f"⚠️ File #{i+1} - Error: {str(e)}\n"
                 product_msg += f"\n📂 Saved in: json_files/"
         
-        product_msg += f"\n✅ Thank you for shopping!"
+        product_msg += f"\n✅ {file_sent_count} file(s) delivered successfully!"
+        
+        # ===== UPDATE ORDER STATUS TO DELIVERED =====
+        for order in orders['orders']:
+            if order['order_id'] == order_id:
+                order['status'] = "delivered"
+                order['delivered_at'] = get_indian_time()
+                break
+        save_orders(orders)
         
         markup_delivery = telebot.types.InlineKeyboardMarkup()
         markup_delivery.add(
@@ -701,6 +729,24 @@ def approve_order(call):
         )
         
         bot.send_message(order_found['user_id'], product_msg, reply_markup=markup_delivery)
+        
+        # ===== SEND DELIVERY LOG TO ADMIN =====
+        delivery_log = f"📦 **DELIVERY DETAILS**\n━━━━━━━━━━━━━━\n\n"
+        delivery_log += f"🆔 Order: {order_id}\n"
+        delivery_log += f"👤 User: @{order_found['username']}\n"
+        delivery_log += f"📦 Product: {product_to_deliver['name']}\n"
+        delivery_log += f"📦 Quantity: {quantity}\n"
+        delivery_log += f"📅 Time: {get_indian_time()}\n\n"
+        
+        if delivered_file_names:
+            delivery_log += f"📁 **Files Delivered:**\n"
+            for i, name in enumerate(delivered_file_names, 1):
+                delivery_log += f"  {i}. {name}\n"
+        
+        delivery_log += f"\n✅ Status: Delivered Successfully!"
+        
+        bot.send_message(ADMIN_ID, delivery_log, parse_mode='Markdown')
+        bot.send_message("@Prime_Blogs", delivery_log, parse_mode='Markdown')
         
         ref_text = f"\nRef: {order_found.get('reference', 'N/A')}" if order_found.get('reference') else ""
         markup_admin = telebot.types.InlineKeyboardMarkup()
@@ -714,11 +760,12 @@ def approve_order(call):
             f"Order: {order_id}\n"
             f"Product: {order_found['product']}\n"
             f"Qty: {quantity}\n"
+            f"Files Sent: {file_sent_count}\n"
             f"User: @{order_found['username']}{ref_text}",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             reply_markup=markup_admin)
-        bot.answer_callback_query(call.id, "✅ Delivered!", show_alert=True)
+        bot.answer_callback_query(call.id, f"✅ Delivered! {file_sent_count} file(s) sent!", show_alert=True)
     except Exception as e:
         print(f"Error in approve: {e}")
         traceback.print_exc()
@@ -744,10 +791,14 @@ def reject_order(call):
             bot.answer_callback_query(call.id, "❌ Order not found!", show_alert=True)
             return
         
+        if order_found['status'] == "delivered":
+            bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
+            return
+        
         for order in orders['orders']:
             if order['order_id'] == order_id:
                 order['status'] = "rejected"
-                order['rejected_at'] = str(datetime.now())
+                order['rejected_at'] = get_indian_time()
                 break
         save_orders(orders)
         
@@ -794,7 +845,7 @@ def track_order(call):
         orders = load_orders()
         for order in orders['orders']:
             if order['order_id'] == order_id:
-                status_emoji = {"pending": "⏳", "pending_approval": "🔄", "delivered": "✅", "rejected": "❌", "cancelled": "🚫"}
+                status_emoji = {"pending": "⏳", "pending_approval": "🔄", "delivered": "✅", "rejected": "❌", "cancelled": "🚫", "processing": "⚙️"}
                 msg = f"📦 ORDER STATUS\n━━━━━━━━━━━━━━\n\n"
                 msg += f"Order: {order_id}\n"
                 msg += f"Product: {order['product']}\n"
@@ -804,9 +855,9 @@ def track_order(call):
                 msg += f"Status: {status_emoji.get(order['status'], '❓')} {order['status'].upper()}\n"
                 if order.get('reference'):
                     msg += f"Ref: {order['reference']}\n"
-                msg += f"Date: {order.get('created_at', 'N/A')[:10]}\n"
+                msg += f"Date: {order.get('created_at', 'N/A')}\n"
                 if order.get('delivered_at'):
-                    msg += f"Delivered: {order['delivered_at'][:10]}\n"
+                    msg += f"Delivered: {order['delivered_at']}\n"
                 markup = telebot.types.InlineKeyboardMarkup()
                 markup.add(
                     telebot.types.InlineKeyboardButton("🛒 Shop", callback_data="shop"),
@@ -835,7 +886,7 @@ def my_orders(call):
             return
         msg = "📦 MY ORDERS\n━━━━━━━━━━━━━━\n\n"
         for i, order in enumerate(user_orders[:5], 1):
-            status_emoji = {"pending": "⏳", "pending_approval": "🔄", "delivered": "✅", "rejected": "❌", "cancelled": "🚫"}
+            status_emoji = {"pending": "⏳", "pending_approval": "🔄", "delivered": "✅", "rejected": "❌", "cancelled": "🚫", "processing": "⚙️"}
             msg += f"{i}. {order['order_id']}\n"
             msg += f"   Product: {order['product']}\n"
             msg += f"   Qty: {order.get('quantity', 1)}\n"
@@ -843,7 +894,7 @@ def my_orders(call):
             msg += f"   {status_emoji.get(order['status'], '❓')}\n"
             if order.get('reference'):
                 msg += f"   Ref: {order['reference']}\n"
-            msg += f"   {order['created_at'][:10]}\n\n"
+            msg += f"   {order['created_at']}\n\n"
         markup = telebot.types.InlineKeyboardMarkup()
         markup.add(
             telebot.types.InlineKeyboardButton("🛒 Shop", callback_data="shop"),
@@ -939,7 +990,7 @@ def admin_pending(call):
         msg += f"₹{order['price']} each | Total: ₹{order['total']}\n"
         if order.get('reference'):
             msg += f"Ref: {order['reference']}\n"
-        msg += f"Date: {order['created_at'][:10]}\n\n"
+        msg += f"Date: {order['created_at']}\n\n"
     
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(
@@ -1077,7 +1128,8 @@ def admin_stats(call):
     msg += f"🔄 Pending: {len([o for o in orders['orders'] if o['status'] == 'pending_approval'])}\n"
     msg += f"⏳ New: {len([o for o in orders['orders'] if o['status'] == 'pending'])}\n"
     msg += f"❌ Rejected: {len([o for o in orders['orders'] if o['status'] == 'rejected'])}\n"
-    msg += f"🚫 Cancelled: {len([o for o in orders['orders'] if o['status'] == 'cancelled'])}\n\n"
+    msg += f"🚫 Cancelled: {len([o for o in orders['orders'] if o['status'] == 'cancelled'])}\n"
+    msg += f"⚙️ Processing: {len([o for o in orders['orders'] if o['status'] == 'processing'])}\n\n"
     msg += f"📋 Products (Stock):\n"
     msg += f"🎫 Coupons: {len(data['products']['coupons'])} ({coupon_stock} units)\n"
     msg += f"📁 JSON: {len(data['products']['json_files'])} ({json_stock} units)"
@@ -1104,7 +1156,7 @@ def admin_orders(call):
     
     msg = "📦 ALL ORDERS\n━━━━━━━━━━━━━━\n\n"
     for order in orders['orders'][-10:]:
-        status_emoji = {"pending": "⏳", "pending_approval": "🔄", "delivered": "✅", "rejected": "❌", "cancelled": "🚫"}
+        status_emoji = {"pending": "⏳", "pending_approval": "🔄", "delivered": "✅", "rejected": "❌", "cancelled": "🚫", "processing": "⚙️"}
         msg += f"Order: {order['order_id']}\n"
         msg += f"User: {order['username']}\n"
         msg += f"Product: {order['product']}\n"
@@ -1113,7 +1165,7 @@ def admin_orders(call):
         msg += f"{status_emoji.get(order['status'], '❓')}\n"
         if order.get('reference'):
             msg += f"Ref: {order['reference']}\n"
-        msg += f"Date: {order['created_at'][:10]}\n\n"
+        msg += f"Date: {order['created_at']}\n\n"
     
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(
@@ -1220,12 +1272,10 @@ print(f"Co-Admin: @{CO_ADMIN_USERNAME}")
 print(f"UPI: {OWNER_UPI}")
 print("=" * 50)
 
-# Start bot in background thread
 bot_thread = threading.Thread(target=run_bot)
 bot_thread.daemon = True
 bot_thread.start()
 
-# Run Flask server
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
