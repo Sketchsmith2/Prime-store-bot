@@ -1,0 +1,24 @@
+{
+  "products": {
+    "coupons": [],
+    "json_files": [
+      {
+        "name": "Bigbasket JSON",
+        "price": 15,
+        "stock": 6,
+        "custom_message": "🛒 Bigbasket JSON\n━━━━━━━━━━━━━━\n\n✅ Fresh JSON\n✅ 400 par 150 off applicable\n✅ Valid for 30 days\n\n⚠️ Use at your own risk.\n\n🎉 Enjoy!"
+      },
+      {
+        "name": "Meesho JSON",
+        "price": 20,
+        "stock": 5,
+        "custom_message": "🛍️ Meesho JSON\n━━━━━━━━━━━━━━\n\n✅ Offer already activated\n✅ Seedha JSON login karo\n✅ Valid for 30 days\n\n⚠️ Use at your own risk.\n\n🎉 Enjoy!"
+      }
+    ]
+  },
+  "settings": {
+    "total_earned": 0,
+    "total_orders": 0
+  }
+}
+
