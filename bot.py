@@ -592,7 +592,7 @@ def process_reference(message, order_id):
         reply_markup=markup_user)
 
 # ============================================================
-# ===== APPROVE / REJECT - FIXED: REMOVE SOLD FILES =====
+# ===== APPROVE / REJECT - FIXED =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
