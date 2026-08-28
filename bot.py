@@ -592,7 +592,7 @@ def process_reference(message, order_id):
         reply_markup=markup_user)
 
 # ============================================================
-# ===== APPROVE / REJECT - FIXED =====
+# ===== APPROVE / REJECT - FINAL FIXED =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
@@ -708,6 +708,9 @@ def approve_order(call):
                 for i in range(quantity):
                     if product_to_deliver['data']:
                         product_to_deliver['data'].pop(0)
+                
+                # ===== 🔥 FORCE SAVE DATA =====
+                save_data(data)
                 
                 product_msg += f"\n📂 Saved in: json_files/"
             else:
