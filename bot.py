@@ -730,23 +730,24 @@ def approve_order(call):
         
         bot.send_message(order_found['user_id'], product_msg, reply_markup=markup_delivery)
         
-        # ===== SEND DELIVERY LOG TO ADMIN =====
-        delivery_log = f"📦 **DELIVERY DETAILS**\n━━━━━━━━━━━━━━\n\n"
-        delivery_log += f"🆔 Order: {order_id}\n"
-        delivery_log += f"👤 User: @{order_found['username']}\n"
-        delivery_log += f"📦 Product: {product_to_deliver['name']}\n"
-        delivery_log += f"📦 Quantity: {quantity}\n"
-        delivery_log += f"📅 Time: {get_indian_time()}\n\n"
+        # ===== SEND DELIVERY LOG TO ADMIN (NO MARKDOWN) =====
+        delivery_log = f"📦 DELIVERY DETAILS\n━━━━━━━━━━━━━━\n\n"
+        delivery_log += f"Order: {order_id}\n"
+        delivery_log += f"User: @{order_found['username']}\n"
+        delivery_log += f"Product: {product_to_deliver['name']}\n"
+        delivery_log += f"Quantity: {quantity}\n"
+        delivery_log += f"Time: {get_indian_time()}\n\n"
         
         if delivered_file_names:
-            delivery_log += f"📁 **Files Delivered:**\n"
+            delivery_log += f"Files Delivered:\n"
             for i, name in enumerate(delivered_file_names, 1):
                 delivery_log += f"  {i}. {name}\n"
         
-        delivery_log += f"\n✅ Status: Delivered Successfully!"
+        delivery_log += f"\nStatus: Delivered Successfully!"
         
-        bot.send_message(ADMIN_ID, delivery_log, parse_mode='Markdown')
-        bot.send_message("@Prime_Blogs", delivery_log, parse_mode='Markdown')
+        # Send without Markdown parsing to avoid errors
+        bot.send_message(ADMIN_ID, delivery_log)
+        bot.send_message("@Prime_Blogs", delivery_log)
         
         ref_text = f"\nRef: {order_found.get('reference', 'N/A')}" if order_found.get('reference') else ""
         markup_admin = telebot.types.InlineKeyboardMarkup()
