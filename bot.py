@@ -18,7 +18,7 @@ import pytz
 TOKEN = os.environ.get('BOT_TOKEN', "8931616308:AAHwwwjGhxxpM_6S00o1eBshSKT3aTC8iWM")
 ADMIN_ID = int(os.environ.get('ADMIN_ID', 939433537))
 CO_ADMIN_USERNAME = "Prime_Blogs"
-CO_ADMIN_CHAT_ID = 939433537  # Apna chat ID daalein - @userinfobot se lo
+CO_ADMIN_CHAT_ID = 939433537
 OWNER_UPI = os.environ.get('OWNER_UPI', "8218957984@mbk")
 OWNER_PHONE = os.environ.get('OWNER_PHONE', "8218957984")
 STORE_NAME = "Prime Store"
@@ -566,7 +566,6 @@ def process_reference(message, order_id):
     bot.send_message(ADMIN_ID, admin_msg, reply_markup=markup)
     bot.send_message(ADMIN_ID, f"🔔 NEW PAYMENT!\nRef: {reference}")
     
-    # FIXED: Use Chat ID instead of username
     try:
         bot.send_message(CO_ADMIN_CHAT_ID, admin_msg, reply_markup=markup)
         bot.send_message(CO_ADMIN_CHAT_ID, f"🔔 NEW PAYMENT!\nRef: {reference}")
@@ -593,7 +592,7 @@ def process_reference(message, order_id):
         reply_markup=markup_user)
 
 # ============================================================
-# ===== APPROVE / REJECT - FIXED WITH DELIVERY LOG =====
+# ===== APPROVE / REJECT - FIXED: REMOVE SOLD FILES =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
@@ -685,8 +684,13 @@ def approve_order(call):
         
         elif category == "json":
             if isinstance(product_to_deliver['data'], list):
-                files_to_send = product_to_deliver['data'][:quantity]
+                # ===== FILES TO SEND =====
+                files_to_send = []
+                for i in range(quantity):
+                    if i < len(product_to_deliver['data']):
+                        files_to_send.append(product_to_deliver['data'][i])
                 
+                # ===== SEND FILES =====
                 for i, file_data in enumerate(files_to_send):
                     file_id = generate_file_id()
                     filename = f"{file_id}_{file_data.get('name', 'file').replace(' ', '_')}.json"
@@ -700,7 +704,11 @@ def approve_order(call):
                     except Exception as e:
                         product_msg += f"⚠️ File #{i+1} - Error: {str(e)}\n"
                 
-                product_to_deliver['data'] = product_to_deliver['data'][quantity:]
+                # ===== 🔥 REMOVE SOLD FILES FROM DATA =====
+                for i in range(quantity):
+                    if product_to_deliver['data']:
+                        product_to_deliver['data'].pop(0)
+                
                 product_msg += f"\n📂 Saved in: json_files/"
             else:
                 for i in range(quantity):
@@ -736,7 +744,7 @@ def approve_order(call):
         
         bot.send_message(order_found['user_id'], product_msg, reply_markup=markup_delivery)
         
-        # ===== SEND DELIVERY LOG TO ADMIN (NO MARKDOWN) =====
+        # ===== SEND DELIVERY LOG TO ADMIN =====
         delivery_log = f"📦 DELIVERY DETAILS\n━━━━━━━━━━━━━━\n\n"
         delivery_log += f"Order: {order_id}\n"
         delivery_log += f"User: @{order_found['username']}\n"
@@ -751,10 +759,7 @@ def approve_order(call):
         
         delivery_log += f"\nStatus: Delivered Successfully!"
         
-        # Send to main admin
         bot.send_message(ADMIN_ID, delivery_log)
-        
-        # Send to co-admin using Chat ID (FIXED)
         try:
             bot.send_message(CO_ADMIN_CHAT_ID, delivery_log)
         except:
