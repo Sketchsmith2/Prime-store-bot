@@ -19,7 +19,7 @@ TOKEN = os.environ.get('BOT_TOKEN', "8931616308:AAHwwwjGhxxpM_6S00o1eBshSKT3aTC8
 ADMIN_ID = int(os.environ.get('ADMIN_ID', 939433537))
 CO_ADMIN_USERNAME = "Prime_Blogs"
 CO_ADMIN_CHAT_ID = 939433537
-OWNER_UPI = os.environ.get('OWNER_UPI', "8218957984@mbk")
+OWNER_UPI = os.environ.get('OWNER_UPI', "8218957984@seyes")
 OWNER_PHONE = os.environ.get('OWNER_PHONE', "8218957984")
 STORE_NAME = "Prime Store"
 
