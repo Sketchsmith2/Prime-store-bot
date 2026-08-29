@@ -138,7 +138,7 @@ def start(message):
     bot.send_message(message.chat.id,
         f"✨ Welcome {message.from_user.first_name}!\n\n"
         "🏪 PRIME STORE\n"
-        "━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━\n"
         "🛍️ Products:\n"
         "🎫 Coupon Codes\n"
         "📁 JSON Files\n\n"
@@ -546,6 +546,7 @@ def process_reference(message, order_id):
             break
     save_orders(orders)
     
+    # ===== NOTIFY ADMIN (ONCE) =====
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         telebot.types.InlineKeyboardButton("✅ Approve & Deliver", callback_data=f"approve_{order_id}"),
@@ -563,18 +564,18 @@ def process_reference(message, order_id):
         f"Time: {get_indian_time()}"
     )
     
+    # ===== SEND TO ADMIN ONLY ONCE =====
     bot.send_message(ADMIN_ID, admin_msg, reply_markup=markup)
-    bot.send_message(ADMIN_ID, f"🔔 NEW PAYMENT!\nRef: {reference}")
     
-    try:
-        bot.send_message(CO_ADMIN_CHAT_ID, admin_msg, reply_markup=markup)
-        bot.send_message(CO_ADMIN_CHAT_ID, f"🔔 NEW PAYMENT!\nRef: {reference}")
-    except:
+    # ===== SEND TO CO-ADMIN (if different) =====
+    if CO_ADMIN_CHAT_ID != ADMIN_ID:
         try:
-            bot.send_message("@Prime_Blogs", admin_msg, reply_markup=markup)
-            bot.send_message("@Prime_Blogs", f"🔔 NEW PAYMENT!\nRef: {reference}")
+            bot.send_message(CO_ADMIN_CHAT_ID, admin_msg, reply_markup=markup)
         except:
-            pass
+            try:
+                bot.send_message("@Prime_Blogs", admin_msg, reply_markup=markup)
+            except:
+                pass
     
     markup_user = telebot.types.InlineKeyboardMarkup()
     markup_user.add(
@@ -592,7 +593,7 @@ def process_reference(message, order_id):
         reply_markup=markup_user)
 
 # ============================================================
-# ===== APPROVE / REJECT - FINAL FIXED =====
+# ===== APPROVE / REJECT (FIXED - SINGLE APPROVAL) =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
@@ -652,19 +653,12 @@ def approve_order(call):
             bot.answer_callback_query(call.id, f"❌ Only {stock} available!", show_alert=True)
             return
         
-        # ===== MARK AS PROCESSING =====
+        # ===== MARK AS PROCESSING (to prevent double approval) =====
         for order in orders['orders']:
             if order['order_id'] == order_id:
                 order['status'] = "processing"
                 break
         save_orders(orders)
-        
-        # ===== REDUCE STOCK =====
-        products[product_index]['stock'] = stock - quantity
-        
-        data['settings']['total_earned'] += order_found['total']
-        data['settings']['total_orders'] += 1
-        save_data(data)
         
         # ===== SEND PRODUCTS =====
         product_msg = f"🎉 Order Delivered!\n━━━━━━━━━━━━━━\n\n"
@@ -681,39 +675,67 @@ def approve_order(call):
                 product_msg += f"Expires: {product_to_deliver['expiry']}\n"
             file_sent_count = 1
             delivered_file_names = ["Coupon Code"]
+            
+            # Update stock
+            products[product_index]['stock'] = stock - quantity
+            save_data(data)
         
         elif category == "json":
+            # ===== Handle array of JSONs =====
             if isinstance(product_to_deliver['data'], list):
-                # ===== FILES TO SEND =====
-                files_to_send = []
-                for i in range(quantity):
-                    if i < len(product_to_deliver['data']):
-                        files_to_send.append(product_to_deliver['data'][i])
+                if len(product_to_deliver['data']) < quantity:
+                    bot.answer_callback_query(call.id, f"❌ Only {len(product_to_deliver['data'])} available!", show_alert=True)
+                    return
                 
-                # ===== SEND FILES =====
-                for i, file_data in enumerate(files_to_send):
+                # Select random JSONs
+                selected_indices = random.sample(range(len(product_to_deliver['data'])), quantity)
+                
+                # Send files first (before removing from list)
+                for i, idx in enumerate(selected_indices):
+                    file_data = product_to_deliver['data'][idx]
                     file_id = generate_file_id()
-                    filename = f"{file_id}_{file_data.get('name', 'file').replace(' ', '_')}.json"
-                    filepath = save_json_file(filename, file_data['data'])
+                    mobile = file_data.get('mobile', 'unknown')
+                    filename = f"{file_id}_{mobile}.json"
+                    filepath = save_json_file(filename, file_data)
                     try:
                         with open(filepath, 'rb') as f:
-                            bot.send_document(order_found['user_id'], f, caption=f"📄 {file_data.get('name', f'File {i+1}')}")
-                        product_msg += f"✅ File #{i+1} - Sent!\n"
+                            bot.send_document(
+                                order_found['user_id'], 
+                                f, 
+                                caption=f"📄 Account #{i+1}\nMobile: {mobile}\nUser ID: {file_data.get('user_id', 'N/A')}"
+                            )
+                        product_msg += f"✅ Account #{i+1} (Mobile: {mobile}) - Sent!\n"
                         file_sent_count += 1
-                        delivered_file_names.append(file_data.get('name', f'File {i+1}'))
+                        delivered_file_names.append(f"Account {mobile}")
+                        
+                        # ===== DELETE FILE FROM FILESYSTEM =====
+                        try:
+                            os.remove(filepath)
+                            print(f"🗑️ Deleted: {filepath}")
+                        except Exception as e:
+                            print(f"⚠️ Could not delete {filepath}: {e}")
+                            
                     except Exception as e:
-                        product_msg += f"⚠️ File #{i+1} - Error: {str(e)}\n"
+                        product_msg += f"⚠️ Account #{i+1} - Error: {str(e)}\n"
                 
-                # ===== 🔥 REMOVE SOLD FILES FROM DATA =====
-                for i in range(quantity):
-                    if product_to_deliver['data']:
-                        product_to_deliver['data'].pop(0)
+                # ===== REMOVE SELECTED JSONs FROM store_data.json =====
+                for idx in sorted(selected_indices, reverse=True):
+                    product_to_deliver['data'].pop(idx)
                 
-                # ===== 🔥 FORCE SAVE DATA =====
+                # Update stock to match remaining count
+                products[product_index]['stock'] = len(product_to_deliver['data'])
+                
+                # If no data left, remove the product entirely
+                if len(product_to_deliver['data']) == 0:
+                    products.pop(product_index)
+                    product_msg += f"\n📂 All accounts sold out! Product removed from store."
+                else:
+                    product_msg += f"\n📂 Remaining: {len(product_to_deliver['data'])} accounts"
+                
                 save_data(data)
                 
-                product_msg += f"\n📂 Saved in: json_files/"
             else:
+                # Single JSON (old format)
                 for i in range(quantity):
                     file_id = generate_file_id()
                     filename = f"{file_id}_{product_to_deliver['name'].replace(' ', '_')}_{i+1}.json"
@@ -724,9 +746,27 @@ def approve_order(call):
                         product_msg += f"✅ File #{i+1} - Sent!\n"
                         file_sent_count += 1
                         delivered_file_names.append(f"{product_to_deliver['name']} #{i+1}")
+                        
+                        # ===== DELETE FILE FROM FILESYSTEM =====
+                        try:
+                            os.remove(filepath)
+                            print(f"🗑️ Deleted: {filepath}")
+                        except Exception as e:
+                            print(f"⚠️ Could not delete {filepath}: {e}")
+                            
                     except Exception as e:
                         product_msg += f"⚠️ File #{i+1} - Error: {str(e)}\n"
-                product_msg += f"\n📂 Saved in: json_files/"
+                
+                # Remove from store_data.json
+                products.pop(product_index)
+                save_data(data)
+                product_msg += f"\n📂 Product removed from store"
+        
+        # ===== UPDATE EARNINGS =====
+        data = load_data()
+        data['settings']['total_earned'] += order_found['total']
+        data['settings']['total_orders'] += 1
+        save_data(data)
         
         product_msg += f"\n✅ {file_sent_count} file(s) delivered successfully!"
         
@@ -747,11 +787,10 @@ def approve_order(call):
         
         bot.send_message(order_found['user_id'], product_msg, reply_markup=markup_delivery)
         
-        # ===== SEND DELIVERY LOG TO ADMIN =====
         delivery_log = f"📦 DELIVERY DETAILS\n━━━━━━━━━━━━━━\n\n"
         delivery_log += f"Order: {order_id}\n"
         delivery_log += f"User: @{order_found['username']}\n"
-        delivery_log += f"Product: {product_to_deliver['name']}\n"
+        delivery_log += f"Product: {order_found['product']}\n"
         delivery_log += f"Quantity: {quantity}\n"
         delivery_log += f"Time: {get_indian_time()}\n\n"
         
@@ -778,17 +817,23 @@ def approve_order(call):
             telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
         )
         
+        remaining_stock = 0
+        if product_index < len(products):
+            remaining_stock = products[product_index]['stock']
+        
         bot.edit_message_text(
             f"✅ Order Delivered!\n\n"
             f"Order: {order_id}\n"
             f"Product: {order_found['product']}\n"
             f"Qty: {quantity}\n"
             f"Files Sent: {file_sent_count}\n"
+            f"Remaining Stock: {remaining_stock}\n"
             f"User: @{order_found['username']}{ref_text}",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             reply_markup=markup_admin)
         bot.answer_callback_query(call.id, f"✅ Delivered! {file_sent_count} file(s) sent!", show_alert=True)
+        
     except Exception as e:
         print(f"Error in approve: {e}")
         traceback.print_exc()
@@ -1104,7 +1149,7 @@ def add_json_form(call):
         return
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back"))
-    bot.edit_message_text("📁 ADD JSON\n━━━━━━━━━━━━━━\n\nSend:\nNAME|PRICE|STOCK|JSON_DATA\nExample:\nBigbasket JSON|15|10|{\"key\":\"value\"}\n\nJSON must be in ONE LINE!\nType /cancel", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+    bot.edit_message_text("📁 ADD JSON\n━━━━━━━━━━━━━━\n\nSend:\nNAME|PRICE|STOCK|JSON_DATA\nExample:\nMeesho JSON|20|10|{\"key\":\"value\"}\n\nJSON must be in ONE LINE!\nType /cancel", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
     bot.register_next_step_handler(call.message, process_add_json)
 
 def process_add_json(message):
