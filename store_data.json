@@ -61,7 +61,7 @@
       {
         "name": "Meesho JSON",
         "price": 22,
-        "stock": 60,
+        "stock": 58,
         "custom_message": "\ud83d\udcf1 Meesho JSON\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n\u2705 Fresh JSONs\n\u2705 Offer already activated\n\u2705 Ready to use\n\u2705 Seedha JSON login\n\n\u26a0\ufe0f Use at your own risk.",
         "data": [
           {
@@ -255,16 +255,6 @@
             }
           },
           {
-            "mobile": "9102132151",
-            "user_id": 592439012,
-            "xo": "eyJ0eXBlIjoiY29tcG9zaXRlIn0=.eyJqd3QiOiJleUpoYkdjaU9pSklVekkxTmlJc0ltaDBkSEJ6T2k4dmJXVmxjMmh2TG1OdmJTOXBjMjlmWTI5MWJuUnllVjlqYjJSbElqb2lTVTRpTENKb2RIUndjem92TDIxbFpYTm9ieTVqYjIwdmRtVnljMmx2YmlJNklqRWlMQ0owZVhBaU9pSktWMVFpZlEuZXlKbGVIQWlPakUzT0RneU5EQTNNVEVzSW1oMGRIQnpPaTh2YldWbGMyaHZMbU52YlM5cGJuTjBZVzVqWlY5cFpDSTZJakprTVdJeE5EazNZVFkwTlRoall6STBNalkxTkRSbE1tWTVabU5sTkdZeElpd2lhSFIwY0hNNkx5OXRaV1Z6YUc4dVkyOXRMM1Z6WlhKZmFXUWlPaUkxT1RJME16a3dNVElpTENKcFlYUWlPakUzT0Rnd05qYzVNVEY5LlFnOGFxZ0UyWlFBUldWME1GUTRhNUpfR0Q1ZXIwa2NSNGx6OEE5NldzT2siLCJ4byI6IjcyY2UwNmY3ZTFkMzRjNGQ4YzY2ZmQ0YTMzYzk2MmZmIn0=",
-            "ox": "4Or0EnpVevUdSytShdA2TSlv_GpfAe7KMcsLMD4GQw5z4eYZvzgiaLkTy4USmoECGpQfmbYqGHr8yC58GDdaycw9sAwNTeOk31-MIPOnsMcr86zCFrneeDfh1p6z8edRxbEABA",
-            "identity": {
-              "instance_id": "2d1b1497a6458cc2426544e2f9fce4f1",
-              "gaid": "2ae2f30a-581c-4d9f-adfd-f414ad53f8b1"
-            }
-          },
-          {
             "mobile": "8129843367",
             "user_id": 592439123,
             "xo": "eyJ0eXBlIjoiY29tcG9zaXRlIn0=.eyJqd3QiOiJleUpoYkdjaU9pSklVekkxTmlJc0ltaDBkSEJ6T2k4dmJXVmxjMmh2TG1OdmJTOXBjMjlmWTI5MWJuUnllVjlqYjJSbElqb2lTVTRpTENKb2RIUndjem92TDIxbFpYTm9ieTVqYjIwdmRtVnljMmx2YmlJNklqRWlMQ0owZVhBaU9pSktWMVFpZlEuZXlKbGVIQWlPakUzT0RneU5EQTNNeklzSW1oMGRIQnpPaTh2YldWbGMyaHZMbU52YlM5cGJuTjBZVzVqWlY5cFpDSTZJamN4WVRReU1tWTRZamxsT1RRMU5XSXpaRFptTnpVMVpqTmxOVFZrTmpNMklpd2lhSFIwY0hNNkx5OXRaV1Z6YUc4dVkyOXRMM1Z6WlhKZmFXUWlPaUkxT1RJME16a3hNak1pTENKcFlYUWlPakUzT0Rnd05qYzVNeko5Lnh5OURhUE1yeEV0cmo1aHRoeC1mSkZZSFhyN3NEWGl4WVhTY29RWDBvR3ciLCJ4byI6ImVmMTM1NDk3YzBlODQ4N2E5ZmFkYjViYjQwNWNmMTc5In0=",
@@ -332,16 +322,6 @@
             "identity": {
               "instance_id": "ef9b15bf04fb5f752e7615c4d6072dbb",
               "gaid": "6f9364ff-b987-4b9f-8ae8-101ffbedc53d"
-            }
-          },
-          {
-            "mobile": "9225369820",
-            "user_id": 592432002,
-            "xo": "eyJ0eXBlIjoiY29tcG9zaXRlIn0=.eyJqd3QiOiJleUpoYkdjaU9pSklVekkxTmlJc0ltaDBkSEJ6T2k4dmJXVmxjMmh2TG1OdmJTOXBjMjlmWTI5MWJuUnllVjlqYjJSbElqb2lTVTRpTENKb2RIUndjem92TDIxbFpYTm9ieTVqYjIwdmRtVnljMmx2YmlJNklqRWlMQ0owZVhBaU9pSktWMVFpZlEuZXlKbGVIQWlPakUzT0RneU16a3pNRGdzSW1oMGRIQnpPaTh2YldWbGMyaHZMbU52YlM5cGJuTjBZVzVqWlY5cFpDSTZJbVV5WldFd09EQTBOamMxTXpOaU4yVmxZalV5TkdRM00yWTFNakkxTWpJeklpd2lhSFIwY0hNNkx5OXRaV1Z6YUc4dVkyOXRMM1Z6WlhKZmFXUWlPaUkxT1RJME16SXdNRElpTENKcFlYUWlPakUzT0Rnd05qWTFNRGg5LllOdG94VzRaMWZMVnJBLXZ4THJsaGQxeWd2c1lCNGJ1ZWZzelJxSXVMVDQiLCJ4byI6IjhiODU1ZDEyZTI3NzQzODA5ODg0YmI0ZWVmNWEzNWFhIn0=",
-            "ox": "EFGFFeva5WdtBaWEyMNQ57nLHRrELSNg6NHZjhE_ghQXAGedP3_YbI_6CtSwNfwUt6Lmxvel2Cj8mB7db_ZE_KhpuJqp-7BllyCXUnDpXCP1nVkc4vIfzI_ZxDRhKVPDwu4teA",
-            "identity": {
-              "instance_id": "e2ea080467533b7eeb524d73f5225223",
-              "gaid": "ca67c9eb-af71-491e-90b6-1540589bb954"
             }
           },
           {
