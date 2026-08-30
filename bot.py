@@ -13,6 +13,7 @@ from PIL import Image
 from flask import Flask
 import threading
 import pytz
+import shutil
 
 # ===== CONFIGURATION =====
 TOKEN = os.environ.get('BOT_TOKEN', "8931616308:AAHwwwjGhxxpM_6S00o1eBshSKT3aTC8iWM")
@@ -33,9 +34,11 @@ def get_indian_time():
 DATA_FILE = "store_data.json"
 ORDERS_FILE = "orders.json"
 JSON_FILES_DIR = "json_files/"
+BACKUP_DIR = "backups/"
 
 # ===== CREATE DIRECTORIES =====
 os.makedirs(JSON_FILES_DIR, exist_ok=True)
+os.makedirs(BACKUP_DIR, exist_ok=True)
 
 # ===== BOT INITIALIZE =====
 bot = telebot.TeleBot(TOKEN)
@@ -98,8 +101,18 @@ def load_data():
         return json.load(f)
 
 def save_data(data):
+    # Create backup before saving
+    try:
+        backup_file = f"{BACKUP_DIR}store_data_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(backup_file, 'w') as f:
+            json.dump(data, f, indent=2)
+        print(f"✅ Backup created: {backup_file}")
+    except Exception as e:
+        print(f"⚠️ Backup failed: {e}")
+    
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=2)
+    print("✅ Data saved")
 
 def load_orders():
     with open(ORDERS_FILE, 'r') as f:
@@ -120,6 +133,20 @@ def save_json_file(filename, data):
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=2)
     return filepath
+
+def delete_json_file(filepath):
+    """Safely delete a JSON file"""
+    try:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            print(f"🗑️ Deleted: {filepath}")
+            return True
+        else:
+            print(f"⚠️ File not found: {filepath}")
+            return False
+    except Exception as e:
+        print(f"❌ Error deleting {filepath}: {e}")
+        return False
 
 # ============================================================
 # ===== MAIN MENU =====
@@ -593,7 +620,7 @@ def process_reference(message, order_id):
         reply_markup=markup_user)
 
 # ============================================================
-# ===== APPROVE / REJECT (FIXED - SINGLE APPROVAL) =====
+# ===== APPROVE / REJECT (FIXED - SINGLE APPROVAL + AUTO DELETE) =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
@@ -668,6 +695,7 @@ def approve_order(call):
         
         file_sent_count = 0
         delivered_file_names = []
+        delivered_mobiles = []
         
         if category == "coupon":
             product_msg += f"Coupon Code:\n{product_to_deliver['code']}\n"
@@ -685,18 +713,43 @@ def approve_order(call):
             if isinstance(product_to_deliver['data'], list):
                 if len(product_to_deliver['data']) < quantity:
                     bot.answer_callback_query(call.id, f"❌ Only {len(product_to_deliver['data'])} available!", show_alert=True)
+                    # Reset order status
+                    for order in orders['orders']:
+                        if order['order_id'] == order_id:
+                            order['status'] = "pending_approval"
+                            break
+                    save_orders(orders)
                     return
                 
                 # Select random JSONs
                 selected_indices = random.sample(range(len(product_to_deliver['data'])), quantity)
+                print(f"📦 Selected indices: {selected_indices}")
                 
-                # Send files first (before removing from list)
-                for i, idx in enumerate(selected_indices):
-                    file_data = product_to_deliver['data'][idx]
+                # Store selected data for delivery
+                selected_data = []
+                for idx in selected_indices:
+                    selected_data.append(product_to_deliver['data'][idx])
+                
+                # ===== FIRST: Remove from store_data.json =====
+                for idx in sorted(selected_indices, reverse=True):
+                    removed = product_to_deliver['data'].pop(idx)
+                    delivered_mobiles.append(removed.get('mobile', 'unknown'))
+                    print(f"🗑️ Removed from store: {removed.get('mobile', 'unknown')}")
+                
+                # Update stock
+                products[product_index]['stock'] = len(product_to_deliver['data'])
+                
+                # ===== SAVE STORE DATA (IMPORTANT!) =====
+                save_data(data)
+                print(f"💾 Store data saved! Remaining: {len(product_to_deliver['data'])}")
+                
+                # ===== SECOND: Send files and delete from filesystem =====
+                for i, file_data in enumerate(selected_data):
                     file_id = generate_file_id()
                     mobile = file_data.get('mobile', 'unknown')
                     filename = f"{file_id}_{mobile}.json"
                     filepath = save_json_file(filename, file_data)
+                    
                     try:
                         with open(filepath, 'rb') as f:
                             bot.send_document(
@@ -718,21 +771,14 @@ def approve_order(call):
                     except Exception as e:
                         product_msg += f"⚠️ Account #{i+1} - Error: {str(e)}\n"
                 
-                # ===== REMOVE SELECTED JSONs FROM store_data.json =====
-                for idx in sorted(selected_indices, reverse=True):
-                    product_to_deliver['data'].pop(idx)
-                
-                # Update stock to match remaining count
-                products[product_index]['stock'] = len(product_to_deliver['data'])
-                
                 # If no data left, remove the product entirely
                 if len(product_to_deliver['data']) == 0:
                     products.pop(product_index)
                     product_msg += f"\n📂 All accounts sold out! Product removed from store."
+                    # Save again after product removal
+                    save_data(data)
                 else:
                     product_msg += f"\n📂 Remaining: {len(product_to_deliver['data'])} accounts"
-                
-                save_data(data)
                 
             else:
                 # Single JSON (old format)
@@ -763,7 +809,7 @@ def approve_order(call):
                 product_msg += f"\n📂 Product removed from store"
         
         # ===== UPDATE EARNINGS =====
-        data = load_data()
+        data = load_data()  # Reload to get latest
         data['settings']['total_earned'] += order_found['total']
         data['settings']['total_orders'] += 1
         save_data(data)
@@ -821,7 +867,14 @@ def approve_order(call):
         if product_index < len(products):
             remaining_stock = products[product_index]['stock']
         
-        bot.edit_message_text(
+        # ===== DELETE ADMIN MESSAGE TO PREVENT DOUBLE CLICK =====
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except:
+            pass
+        
+        bot.send_message(
+            call.message.chat.id,
             f"✅ Order Delivered!\n\n"
             f"Order: {order_id}\n"
             f"Product: {order_found['product']}\n"
@@ -829,9 +882,8 @@ def approve_order(call):
             f"Files Sent: {file_sent_count}\n"
             f"Remaining Stock: {remaining_stock}\n"
             f"User: @{order_found['username']}{ref_text}",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
             reply_markup=markup_admin)
+        
         bot.answer_callback_query(call.id, f"✅ Delivered! {file_sent_count} file(s) sent!", show_alert=True)
         
     except Exception as e:
@@ -890,12 +942,17 @@ def reject_order(call):
             telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
         )
         
-        bot.edit_message_text(
+        # Delete the admin message
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except:
+            pass
+        
+        bot.send_message(
+            call.message.chat.id,
             f"❌ Order Rejected\n\n"
             f"Order: {order_id}\n"
             f"User: @{order_found['username']}",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
             reply_markup=markup_admin)
         bot.answer_callback_query(call.id, "❌ Rejected!", show_alert=True)
     except Exception as e:
