@@ -284,7 +284,7 @@ def cat_json(call):
 user_selection = {}
 
 # ============================================================
-# ===== BUY PRODUCT - ASK QUANTITY =====
+# ===== BUY PRODUCT - ASK QUANTITY (1 to 50) =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('buy_'))
@@ -327,17 +327,57 @@ def buy_product(call):
             "stock": stock
         }
         
-        markup = telebot.types.InlineKeyboardMarkup(row_width=3)
-        max_qty = min(5, stock)
-        for q in range(1, max_qty + 1):
-            markup.add(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+        # ===== CUSTOM QUANTITY BUTTONS (1 to 50) =====
+        markup = telebot.types.InlineKeyboardMarkup(row_width=5)
+        max_qty = min(50, stock)
+        
+        # Row 1: 1-10
+        row1 = []
+        for q in range(1, 11):
+            if q <= max_qty:
+                row1.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+        if row1:
+            markup.row(*row1)
+        
+        # Row 2: 11-20
+        row2 = []
+        for q in range(11, 21):
+            if q <= max_qty:
+                row2.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+        if row2:
+            markup.row(*row2)
+        
+        # Row 3: 21-30
+        row3 = []
+        for q in range(21, 31):
+            if q <= max_qty:
+                row3.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+        if row3:
+            markup.row(*row3)
+        
+        # Row 4: 31-40
+        row4 = []
+        for q in range(31, 41):
+            if q <= max_qty:
+                row4.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+        if row4:
+            markup.row(*row4)
+        
+        # Row 5: 41-50
+        row5 = []
+        for q in range(41, 51):
+            if q <= max_qty:
+                row5.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+        if row5:
+            markup.row(*row5)
+        
         markup.add(
             telebot.types.InlineKeyboardButton("🔙 Back", callback_data="shop"),
             telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
         )
         
         bot.edit_message_text(
-            f"📝 SELECT QUANTITY\n━━━━━━━━━━━━━━\n\n"
+            f"📝 SELECT QUANTITY (1-50)\n━━━━━━━━━━━━━━\n\n"
             f"📦 Product: {product['name']}\n"
             f"💰 Price: ₹{product['price']} each\n"
             f"📦 Available: {stock} files\n\n"
@@ -1036,7 +1076,7 @@ def help_callback(call):
         msg += "How to Buy:\n"
         msg += "1. Browse categories\n"
         msg += "2. Select product\n"
-        msg += "3. Choose quantity\n"
+        msg += "3. Choose quantity (1-50)\n"
         msg += "4. Pay via UPI (Scan QR)\n"
         msg += "5. Click 'I Have Paid'\n"
         msg += "6. Enter Transaction ID/UTR\n"
