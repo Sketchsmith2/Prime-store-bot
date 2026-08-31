@@ -135,17 +135,15 @@ def save_json_file(filename, data):
     return filepath
 
 def delete_json_file(filepath):
-    """Safely delete a JSON file"""
     try:
         if os.path.exists(filepath):
             os.remove(filepath)
             print(f"🗑️ Deleted: {filepath}")
             return True
         else:
-            print(f"⚠️ File not found: {filepath}")
             return False
     except Exception as e:
-        print(f"❌ Error deleting {filepath}: {e}")
+        print(f"❌ Error: {e}")
         return False
 
 # ============================================================
@@ -907,9 +905,19 @@ def approve_order(call):
         if product_index < len(products):
             remaining_stock = products[product_index]['stock']
         
-        # ===== DELETE ADMIN MESSAGE TO PREVENT DOUBLE CLICK =====
+        # ===== DELETE ADMIN MESSAGE TO PREVENT DOUBLE CLICK (FIXED) =====
         try:
             bot.delete_message(call.message.chat.id, call.message.message_id)
+        except:
+            pass
+        
+        # ===== ALSO REMOVE BUTTONS FROM ADMIN MESSAGE =====
+        try:
+            bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=None
+            )
         except:
             pass
         
