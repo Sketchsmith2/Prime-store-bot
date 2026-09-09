@@ -183,14 +183,13 @@ def support(call):
     )
     
     bot.edit_message_text(
-        "📞 SUPPORT\n━━━━━━━━━━━━━━\n\n"
-        "For any queries or issues:\n"
-        "📱 Contact: @Prime_Blogs\n\n"
-        "⏰ Response: Within 1 hour\n\n"
-        "💬 Feel free to reach out!",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        reply_markup=markup)
+    f"✅ PAYMENT SUBMITTED!\n━━━━━━━━━━━━━━\n\n"
+    f"Order: {order_id}\n\n"
+    f"⏳ Waiting for admin approval...\n\n"
+    f"📞 Contact: @Prime_Blogs if delayed.",
+    chat_id=call.message.chat.id,
+    message_id=call.message.message_id,
+    reply_markup=markup)
 
 # ============================================================
 # ===== SHOP & CATEGORIES =====
