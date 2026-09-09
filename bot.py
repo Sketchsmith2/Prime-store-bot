@@ -1428,10 +1428,6 @@ def add_json_step3(message, json_data):
 # ===== RUN BOT =====
 # ============================================================
 
-def run_webhook():
-    # Not used - polling mode
-    pass
-
 def run_polling():
     print("🚀 Bot started in polling mode!")
     print(f"📅 Time: {get_indian_time()}")
@@ -1443,4 +1439,20 @@ if __name__ == "__main__":
     print(f"🏪 {STORE_NAME} BOT")
     print(f"📅 Started: {get_indian_time()}")
     print("=" * 40)
-    run_polling()
+    
+    # Flask server for Render Web Service
+    app = Flask(__name__)
+    
+    @app.route('/')
+    def index():
+        return "Bot is running!"
+    
+    def run_flask():
+        app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
+    
+    # Run bot in thread
+    import threading
+    threading.Thread(target=run_polling, daemon=True).start()
+    
+    # Run Flask server
+    run_flask()
