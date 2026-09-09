@@ -202,8 +202,8 @@ def shop(call):
         data = load_data()
         markup = telebot.types.InlineKeyboardMarkup(row_width=2)
         
-        json_stock = sum(p.get('stock', 1) for p in data['products']['json_files'])
-        coupon_stock = sum(p.get('stock', 1) for p in data['products']['coupons'])
+        json_stock = sum(p.get('stock', 0) for p in data['products']['json_files'])
+        coupon_stock = sum(p.get('stock', 0) for p in data['products']['coupons'])
         
         markup.add(
             telebot.types.InlineKeyboardButton(f"🎫 Coupons ({coupon_stock})", callback_data="cat_coupons"),
@@ -233,7 +233,7 @@ def cat_coupons(call):
             return
         markup = telebot.types.InlineKeyboardMarkup(row_width=1)
         for i, p in enumerate(products):
-            stock = p.get('stock', 1)
+            stock = p.get('stock', 0)
             stock_emoji = "🟢" if stock > 0 else "🔴"
             markup.add(telebot.types.InlineKeyboardButton(f"{stock_emoji} {p['name']} - ₹{p['price']} ({stock} left)", callback_data=f"buy_coupon_{i}"))
         markup.add(
@@ -258,7 +258,7 @@ def cat_json(call):
             return
         markup = telebot.types.InlineKeyboardMarkup(row_width=1)
         for i, p in enumerate(products):
-            stock = p.get('stock', 1)
+            stock = p.get('stock', 0)
             stock_emoji = "🟢" if stock > 0 else "🔴"
             markup.add(telebot.types.InlineKeyboardButton(f"{stock_emoji} {p['name']} - ₹{p['price']} ({stock} left)", callback_data=f"buy_json_{i}"))
         markup.add(
@@ -303,9 +303,9 @@ def buy_product(call):
             return
         
         product = products[index]
-        stock = product.get('stock', 1)
+        stock = product.get('stock', 0)
         
-        # ✅ FIX: Check stock properly
+        # ✅ FIX: Proper stock check
         if stock <= 0:
             bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
             return
@@ -950,11 +950,10 @@ def back_main(call):
         start(call.message)
 
 # ============================================================
-# ===== ADMIN COMMANDS =====
+# ===== ADMIN PANEL =====
 # ============================================================
 
-@bot.message_handler(commands=['admin'])
-def admin_panel(message):
+def admin_panel_message(message):
     if not is_admin(message.from_user.id, message.from_user.username or ""):
         bot.reply_to(message, "❌ Unauthorized!")
         return
@@ -974,56 +973,30 @@ def admin_panel(message):
         "Select an option:",
         reply_markup=markup)
 
+@bot.message_handler(commands=['admin'])
+def admin_panel(message):
+    if not is_admin(message.from_user.id, message.from_user.username or ""):
+        bot.reply_to(message, "❌ Unauthorized!")
+        return
+    
+    admin_panel_message(message)
+
 # ============================================================
-# ===== ADMIN LIST STOCK =====
+# ===== ADMIN BACK =====
 # ============================================================
 
-@bot.callback_query_handler(func=lambda call: call.data == "admin_list")
-def admin_list(call):
+@bot.callback_query_handler(func=lambda call: call.data == "admin_back")
+def admin_back(call):
     if not is_admin(call.from_user.id, call.from_user.username or ""):
         bot.answer_callback_query(call.id, "❌ Unauthorized!", show_alert=True)
         return
     
     try:
-        data = load_data()
-        msg = "📋 STOCK LIST\n━━━━━━━━━━━━━━\n\n"
-        
-        # JSON Files
-        if data['products']['json_files']:
-            msg += "📁 JSON FILES:\n"
-            for p in data['products']['json_files']:
-                stock = p.get('stock', 0)
-                price = p.get('price', 0)
-                msg += f"  • {p['name']} - ₹{price} ({stock} left)\n"
-        else:
-            msg += "📁 No JSON files\n"
-        
-        msg += "\n"
-        
-        # Coupons
-        if data['products']['coupons']:
-            msg += "🎫 COUPONS:\n"
-            for p in data['products']['coupons']:
-                stock = p.get('stock', 0)
-                price = p.get('price', 0)
-                msg += f"  • {p['name']} - ₹{price} ({stock} left)\n"
-        else:
-            msg += "🎫 No coupons\n"
-        
-        markup = telebot.types.InlineKeyboardMarkup()
-        markup.add(
-            telebot.types.InlineKeyboardButton("🔄 Refresh", callback_data="admin_list"),
-            telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back")
-        )
-        
-        bot.edit_message_text(
-            msg,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=markup)
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        admin_panel_message(call.message)
     except Exception as e:
         print(f"Error: {e}")
-        bot.answer_callback_query(call.id, "❌ Error!", show_alert=True)
+        admin_panel_message(call.message)
 
 # ============================================================
 # ===== ADMIN STATS =====
@@ -1162,21 +1135,55 @@ def view_order(call):
         print(f"Error: {e}")
 
 # ============================================================
-# ===== ADMIN BACK =====
+# ===== ADMIN LIST STOCK =====
 # ============================================================
 
-@bot.callback_query_handler(func=lambda call: call.data == "admin_back")
-def admin_back(call):
+@bot.callback_query_handler(func=lambda call: call.data == "admin_list")
+def admin_list(call):
     if not is_admin(call.from_user.id, call.from_user.username or ""):
         bot.answer_callback_query(call.id, "❌ Unauthorized!", show_alert=True)
         return
     
     try:
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-        admin_panel(call.message)
+        data = load_data()
+        msg = "📋 STOCK LIST\n━━━━━━━━━━━━━━\n\n"
+        
+        # JSON Files
+        if data['products']['json_files']:
+            msg += "📁 JSON FILES:\n"
+            for p in data['products']['json_files']:
+                stock = p.get('stock', 0)
+                price = p.get('price', 0)
+                msg += f"  • {p['name']} - ₹{price} ({stock} left)\n"
+        else:
+            msg += "📁 No JSON files\n"
+        
+        msg += "\n"
+        
+        # Coupons
+        if data['products']['coupons']:
+            msg += "🎫 COUPONS:\n"
+            for p in data['products']['coupons']:
+                stock = p.get('stock', 0)
+                price = p.get('price', 0)
+                msg += f"  • {p['name']} - ₹{price} ({stock} left)\n"
+        else:
+            msg += "🎫 No coupons\n"
+        
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.add(
+            telebot.types.InlineKeyboardButton("🔄 Refresh", callback_data="admin_list"),
+            telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back")
+        )
+        
+        bot.edit_message_text(
+            msg,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=markup)
     except Exception as e:
         print(f"Error: {e}")
-        admin_panel(call.message)
+        bot.answer_callback_query(call.id, "❌ Error!", show_alert=True)
 
 # ============================================================
 # ===== ADMIN ADD PRODUCT =====
