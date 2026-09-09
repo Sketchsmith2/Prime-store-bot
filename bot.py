@@ -305,7 +305,7 @@ def buy_product(call):
         product = products[index]
         stock = product.get('stock', 0)
         
-        # ✅ FIX: Proper stock check
+        # ✅ FIXED: Proper stock check
         if stock <= 0:
             bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
             return
@@ -571,9 +571,7 @@ def payment_done(call):
             reply_markup=markup
         )
         
-        # Register next step handler
         bot.register_next_step_handler(msg, process_reference, order_id)
-        
         bot.answer_callback_query(call.id, "✅ Please send reference number!", show_alert=True)
         
     except Exception as e:
@@ -608,7 +606,6 @@ def process_reference(message, order_id):
             bot.reply_to(message, "✅ Already delivered!")
             return
         
-        # Update order with reference
         for order in orders['orders']:
             if order['order_id'] == order_id:
                 order['reference'] = reference
@@ -616,7 +613,6 @@ def process_reference(message, order_id):
                 break
         save_orders(orders)
         
-        # Send confirmation to customer
         markup = telebot.types.InlineKeyboardMarkup()
         markup.add(
             telebot.types.InlineKeyboardButton("📦 My Orders", callback_data="my_orders"),
@@ -635,7 +631,6 @@ def process_reference(message, order_id):
             reply_markup=markup
         )
         
-        # Send notification to admin
         admin_msg = (
             f"🟢 PAYMENT RECEIVED\n━━━━━━━━━━━━━━\n\n"
             f"🆔 Order: {order_id}\n"
@@ -644,25 +639,22 @@ def process_reference(message, order_id):
             f"📦 Qty: {order_found['quantity']}\n"
             f"💰 Total: ₹{order_found['total']}\n"
             f"📝 Ref: {reference}\n"
-            f"🕐 Time: {get_indian_time()}\n\n"
-            f"✅ Approve & Deliver!\n"
-            f"❌ Reject"
+            f"🕐 Time: {get_indian_time()}"
         )
         
         admin_markup = telebot.types.InlineKeyboardMarkup(row_width=2)
         admin_markup.add(
-            telebot.types.InlineKeyboardButton("✅ Approve & Deliver", callback_data=f"approve_{order_id}"),
+            telebot.types.InlineKeyboardButton("✅ Approve", callback_data=f"approve_{order_id}"),
             telebot.types.InlineKeyboardButton("❌ Reject", callback_data=f"reject_{order_id}")
         )
         
         try:
             bot.send_message(ADMIN_ID, admin_msg, reply_markup=admin_markup)
-        except Exception as e:
-            print(f"Error sending to admin: {e}")
+        except:
             try:
                 bot.send_message(CO_ADMIN_CHAT_ID, admin_msg, reply_markup=admin_markup)
             except:
-                print("Could not send to any admin")
+                pass
         
     except Exception as e:
         print(f"Error in process_reference: {e}")
@@ -697,7 +689,6 @@ def approve_order(call):
             bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
             return
         
-        # Update order status
         for order in orders['orders']:
             if order['order_id'] == order_id:
                 order['status'] = "delivered"
@@ -705,7 +696,6 @@ def approve_order(call):
                 break
         save_orders(orders)
         
-        # REDUCE STOCK
         try:
             data = load_data()
             category_key = order_found.get('category', 'json')
@@ -721,11 +711,9 @@ def approve_order(call):
                         p['stock'] = 0
                     break
             save_data(data)
-            print(f"✅ Stock reduced for {order_found['product']}")
-        except Exception as e:
-            print(f"⚠️ Stock reduction failed: {e}")
+        except:
+            pass
         
-        # Send file to user
         try:
             filepath = os.path.join(JSON_FILES_DIR, f"{order_found['product']}.json")
             if os.path.exists(filepath):
@@ -748,42 +736,21 @@ def approve_order(call):
                     f"📦 Quantity: {order_found['quantity']}\n\n"
                     f"Thank you for shopping at {STORE_NAME}! 🛍️"
                 )
-        except Exception as e:
-            print(f"Error sending file: {e}")
-            try:
-                bot.send_message(
-                    order_found['user_id'],
-                    f"✅ ORDER DELIVERED!\n━━━━━━━━━━━━━━\n\n"
-                    f"🆔 {order_id}\n"
-                    f"📦 {order_found['product']}\n"
-                    f"📦 Quantity: {order_found['quantity']}\n\n"
-                    f"Thank you for shopping at {STORE_NAME}! 🛍️"
-                )
-            except:
-                pass
+        except:
+            pass
         
-        # Update admin message
         try:
             bot.edit_message_text(
                 f"✅ ORDER APPROVED & DELIVERED!\n━━━━━━━━━━━━━━\n\n"
                 f"Order: {order_id}\n"
                 f"User: {order_found['username']}\n"
                 f"Product: {order_found['product']}\n"
-                f"Quantity: {order_found['quantity']}\n\n"
-                f"✅ Delivered successfully!",
+                f"Quantity: {order_found['quantity']}",
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id
             )
         except:
-            bot.send_message(
-                call.message.chat.id,
-                f"✅ ORDER APPROVED & DELIVERED!\n━━━━━━━━━━━━━━\n\n"
-                f"Order: {order_id}\n"
-                f"User: {order_found['username']}\n"
-                f"Product: {order_found['product']}\n"
-                f"Quantity: {order_found['quantity']}\n\n"
-                f"✅ Delivered successfully!"
-            )
+            pass
         
         bot.answer_callback_query(call.id, "✅ Approved & Delivered!", show_alert=True)
         
@@ -820,7 +787,6 @@ def reject_order(call):
             bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
             return
         
-        # Update order status
         for order in orders['orders']:
             if order['order_id'] == order_id:
                 order['status'] = "rejected"
@@ -828,7 +794,6 @@ def reject_order(call):
                 break
         save_orders(orders)
         
-        # Notify customer
         try:
             bot.send_message(
                 order_found['user_id'],
@@ -841,14 +806,12 @@ def reject_order(call):
         except:
             pass
         
-        # Update admin message
         try:
             bot.edit_message_text(
                 f"❌ ORDER REJECTED!\n━━━━━━━━━━━━━━\n\n"
                 f"Order: {order_id}\n"
                 f"User: {order_found['username']}\n"
-                f"Product: {order_found['product']}\n\n"
-                f"Payment verification failed.",
+                f"Product: {order_found['product']}",
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id
             )
@@ -964,7 +927,7 @@ def admin_panel_message(message):
         telebot.types.InlineKeyboardButton("📦 Orders", callback_data="admin_orders"),
         telebot.types.InlineKeyboardButton("➕ Add", callback_data="admin_add"),
         telebot.types.InlineKeyboardButton("🗑️ Remove", callback_data="admin_delete"),
-        telebot.types.InlineKeyboardButton("📋 List Stock", callback_data="admin_list"),
+        telebot.types.InlineKeyboardButton("📋 Stock", callback_data="admin_list"),
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
     )
     
@@ -1015,7 +978,6 @@ def admin_stats(call):
         total_orders = len(orders['orders'])
         pending_orders = len([o for o in orders['orders'] if o['status'] == "pending"])
         delivered_orders = len([o for o in orders['orders'] if o['status'] == "delivered"])
-        
         total_earned = sum(o.get('total', 0) for o in orders['orders'] if o['status'] == "delivered")
         
         json_products = len(data['products']['json_files'])
@@ -1034,11 +996,7 @@ def admin_stats(call):
         markup = telebot.types.InlineKeyboardMarkup()
         markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back"))
         
-        bot.edit_message_text(
-            msg,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=markup)
+        bot.edit_message_text(msg, chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
     except Exception as e:
         print(f"Error: {e}")
 
@@ -1059,28 +1017,15 @@ def admin_orders(call):
         if not pending:
             markup = telebot.types.InlineKeyboardMarkup()
             markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back"))
-            bot.edit_message_text(
-                "📦 ORDERS\n━━━━━━━━━━━━━━\n\n"
-                "No pending orders! ✅",
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                reply_markup=markup)
+            bot.edit_message_text("📦 ORDERS\n━━━━━━━━━━━━━━\n\nNo pending orders! ✅", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
             return
         
         markup = telebot.types.InlineKeyboardMarkup(row_width=1)
         for o in pending:
-            markup.add(telebot.types.InlineKeyboardButton(
-                f"🆔 {o['order_id']} - {o['username']} - ₹{o['total']}",
-                callback_data=f"view_order_{o['order_id']}"
-            ))
+            markup.add(telebot.types.InlineKeyboardButton(f"🆔 {o['order_id']} - {o['username']} - ₹{o['total']}", callback_data=f"view_order_{o['order_id']}"))
         markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back"))
         
-        bot.edit_message_text(
-            f"📦 PENDING ORDERS ({len(pending)})\n━━━━━━━━━━━━━━\n\n"
-            "Click an order to approve:",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=markup)
+        bot.edit_message_text(f"📦 PENDING ORDERS ({len(pending)})\n━━━━━━━━━━━━━━\n\nClick an order to approve:", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
     except Exception as e:
         print(f"Error: {e}")
 
@@ -1115,8 +1060,7 @@ def view_order(call):
             f"📦 Quantity: {order_found['quantity']}\n"
             f"💰 Total: ₹{order_found['total']}\n"
             f"📝 Reference: {order_found.get('reference', 'N/A')}\n"
-            f"📅 Created: {order_found['created_at']}\n"
-            f"📌 Status: {order_found['status']}"
+            f"📅 Created: {order_found['created_at']}"
         )
         
         markup = telebot.types.InlineKeyboardMarkup(row_width=2)
@@ -1126,11 +1070,7 @@ def view_order(call):
             telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_orders")
         )
         
-        bot.edit_message_text(
-            msg,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=markup)
+        bot.edit_message_text(msg, chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
     except Exception as e:
         print(f"Error: {e}")
 
@@ -1148,7 +1088,6 @@ def admin_list(call):
         data = load_data()
         msg = "📋 STOCK LIST\n━━━━━━━━━━━━━━\n\n"
         
-        # JSON Files
         if data['products']['json_files']:
             msg += "📁 JSON FILES:\n"
             for p in data['products']['json_files']:
@@ -1160,7 +1099,6 @@ def admin_list(call):
         
         msg += "\n"
         
-        # Coupons
         if data['products']['coupons']:
             msg += "🎫 COUPONS:\n"
             for p in data['products']['coupons']:
@@ -1176,14 +1114,9 @@ def admin_list(call):
             telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back")
         )
         
-        bot.edit_message_text(
-            msg,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=markup)
+        bot.edit_message_text(msg, chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
     except Exception as e:
         print(f"Error: {e}")
-        bot.answer_callback_query(call.id, "❌ Error!", show_alert=True)
 
 # ============================================================
 # ===== ADMIN ADD PRODUCT =====
@@ -1202,12 +1135,7 @@ def admin_add(call):
         telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back")
     )
     
-    bot.edit_message_text(
-        "➕ ADD PRODUCT\n━━━━━━━━━━━━━━\n\n"
-        "Select product type:",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        reply_markup=markup)
+    bot.edit_message_text("➕ ADD PRODUCT\n━━━━━━━━━━━━━━\n\nSelect product type:", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
 
 # ============================================================
 # ===== ADMIN DELETE PRODUCT =====
@@ -1224,23 +1152,12 @@ def admin_delete(call):
         markup = telebot.types.InlineKeyboardMarkup(row_width=1)
         
         for i, p in enumerate(data['products']['json_files']):
-            markup.add(telebot.types.InlineKeyboardButton(
-                f"🗑️ {p['name']} - ₹{p['price']} ({p.get('stock', 0)} left)",
-                callback_data=f"del_json_{i}"
-            ))
+            markup.add(telebot.types.InlineKeyboardButton(f"🗑️ {p['name']} - ₹{p['price']} ({p.get('stock', 0)} left)", callback_data=f"del_json_{i}"))
         for i, p in enumerate(data['products']['coupons']):
-            markup.add(telebot.types.InlineKeyboardButton(
-                f"🗑️ {p['name']} - ₹{p['price']} ({p.get('stock', 0)} left)",
-                callback_data=f"del_coupon_{i}"
-            ))
+            markup.add(telebot.types.InlineKeyboardButton(f"🗑️ {p['name']} - ₹{p['price']} ({p.get('stock', 0)} left)", callback_data=f"del_coupon_{i}"))
         markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back"))
         
-        bot.edit_message_text(
-            "🗑️ DELETE PRODUCT\n━━━━━━━━━━━━━━\n\n"
-            "Click product to delete:",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=markup)
+        bot.edit_message_text("🗑️ DELETE PRODUCT\n━━━━━━━━━━━━━━\n\nClick product to delete:", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
     except Exception as e:
         print(f"Error: {e}")
 
@@ -1501,7 +1418,6 @@ if __name__ == "__main__":
     print(f"📅 Started: {get_indian_time()}")
     print("=" * 40)
     
-    # Flask server for Render Web Service
     app = Flask(__name__)
     
     @app.route('/')
@@ -1511,9 +1427,7 @@ if __name__ == "__main__":
     def run_flask():
         app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
     
-    # Run bot in thread
     import threading
     threading.Thread(target=run_polling, daemon=True).start()
-    
-    # Run Flask server
     run_flask()
+
