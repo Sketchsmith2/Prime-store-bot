@@ -305,6 +305,7 @@ def buy_product(call):
         product = products[index]
         stock = product.get('stock', 1)
         
+        # ✅ FIX: Check stock properly
         if stock <= 0:
             bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
             return
@@ -958,12 +959,13 @@ def admin_panel(message):
         bot.reply_to(message, "❌ Unauthorized!")
         return
     
-    markup = telebot.types.InlineKeyboardMarkup(row_width=1)
+    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         telebot.types.InlineKeyboardButton("📊 Stats", callback_data="admin_stats"),
-        telebot.types.InlineKeyboardButton("📦 Pending Orders", callback_data="admin_orders"),
-        telebot.types.InlineKeyboardButton("➕ Add Product", callback_data="admin_add"),
-        telebot.types.InlineKeyboardButton("🗑️ Delete Product", callback_data="admin_delete"),
+        telebot.types.InlineKeyboardButton("📦 Orders", callback_data="admin_orders"),
+        telebot.types.InlineKeyboardButton("➕ Add", callback_data="admin_add"),
+        telebot.types.InlineKeyboardButton("🗑️ Remove", callback_data="admin_delete"),
+        telebot.types.InlineKeyboardButton("📋 List Stock", callback_data="admin_list"),
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
     )
     
@@ -971,6 +973,57 @@ def admin_panel(message):
         "🔐 ADMIN PANEL\n━━━━━━━━━━━━━━\n\n"
         "Select an option:",
         reply_markup=markup)
+
+# ============================================================
+# ===== ADMIN LIST STOCK =====
+# ============================================================
+
+@bot.callback_query_handler(func=lambda call: call.data == "admin_list")
+def admin_list(call):
+    if not is_admin(call.from_user.id, call.from_user.username or ""):
+        bot.answer_callback_query(call.id, "❌ Unauthorized!", show_alert=True)
+        return
+    
+    try:
+        data = load_data()
+        msg = "📋 STOCK LIST\n━━━━━━━━━━━━━━\n\n"
+        
+        # JSON Files
+        if data['products']['json_files']:
+            msg += "📁 JSON FILES:\n"
+            for p in data['products']['json_files']:
+                stock = p.get('stock', 0)
+                price = p.get('price', 0)
+                msg += f"  • {p['name']} - ₹{price} ({stock} left)\n"
+        else:
+            msg += "📁 No JSON files\n"
+        
+        msg += "\n"
+        
+        # Coupons
+        if data['products']['coupons']:
+            msg += "🎫 COUPONS:\n"
+            for p in data['products']['coupons']:
+                stock = p.get('stock', 0)
+                price = p.get('price', 0)
+                msg += f"  • {p['name']} - ₹{price} ({stock} left)\n"
+        else:
+            msg += "🎫 No coupons\n"
+        
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.add(
+            telebot.types.InlineKeyboardButton("🔄 Refresh", callback_data="admin_list"),
+            telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back")
+        )
+        
+        bot.edit_message_text(
+            msg,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=markup)
+    except Exception as e:
+        print(f"Error: {e}")
+        bot.answer_callback_query(call.id, "❌ Error!", show_alert=True)
 
 # ============================================================
 # ===== ADMIN STATS =====
@@ -1017,7 +1070,7 @@ def admin_stats(call):
         print(f"Error: {e}")
 
 # ============================================================
-# ===== ADMIN PENDING ORDERS =====
+# ===== ADMIN ORDERS =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data == "admin_orders")
@@ -1034,7 +1087,7 @@ def admin_orders(call):
             markup = telebot.types.InlineKeyboardMarkup()
             markup.add(telebot.types.InlineKeyboardButton("🔙 Back", callback_data="admin_back"))
             bot.edit_message_text(
-                "📦 PENDING ORDERS\n━━━━━━━━━━━━━━\n\n"
+                "📦 ORDERS\n━━━━━━━━━━━━━━\n\n"
                 "No pending orders! ✅",
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
@@ -1242,7 +1295,7 @@ def delete_coupon(call):
         bot.answer_callback_query(call.id, "❌ Error!", show_alert=True)
 
 # ============================================================
-# ===== ADD COUPON - STEP 1 =====
+# ===== ADD COUPON =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data == "add_coupon")
@@ -1318,7 +1371,7 @@ def add_coupon_step2(message):
         bot.reply_to(message, f"❌ Error: {e}")
 
 # ============================================================
-# ===== ADD JSON FILE - STEP 1 =====
+# ===== ADD JSON FILE =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data == "add_json")
