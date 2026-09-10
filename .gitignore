@@ -3,3 +3,5 @@ Meesho1.txt
 Meesho10.txt
 Premium.txt
 nohup.out
+json_files/*.json
+backups/
