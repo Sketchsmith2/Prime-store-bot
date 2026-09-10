@@ -19,8 +19,8 @@ TOKEN = os.environ.get('BOT_TOKEN', "8931616308:AAHwwwjGhxxpM_6S00o1eBshSKT3aTC8
 ADMIN_ID = int(os.environ.get('ADMIN_ID', 939433537))
 CO_ADMIN_USERNAME = "Prime_Blogs"
 CO_ADMIN_CHAT_ID = 939433537
-OWNER_UPI = "8218957984@seyes"
-OWNER_PHONE = "8218957984"
+OWNER_UPI = os.environ.get('OWNER_UPI', "8218957984@seyes")
+OWNER_PHONE = os.environ.get('OWNER_PHONE', "8218957984")
 STORE_NAME = "Prime Store"
 
 # ===== TIME ZONE =====
@@ -73,12 +73,7 @@ def create_initial_files():
         data = {
             "products": {
                 "coupons": [],
-                "json_files": [
-                    {"name": "Bigbasket JSON", "price": 15, "stock": 6},
-                    {"name": "Meesho 205 OFF", "price": 38, "stock": 20},
-                    {"name": "Premium JSON", "price": 45, "stock": 0},
-                    {"name": "Meesho 120 OFF", "price": 30, "stock": 5}
-                ]
+                "json_files": []
             }
         }
         with open(DATA_FILE, 'w') as f:
@@ -98,6 +93,13 @@ def load_data():
         return json.load(f)
 
 def save_data(data):
+    try:
+        backup_file = f"{BACKUP_DIR}store_data_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(backup_file, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Backup failed: {e}")
+
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=2)
 
@@ -112,21 +114,58 @@ def save_orders(data):
 def generate_order_id():
     return "ORD" + ''.join(random.choices(string.digits, k=8))
 
+# ============================================================
+# ===== FIXED: SINGLE ACCOUNT PER ORDER =====
+# ============================================================
+
 def create_single_order_file(order, index=1):
+    """
+    Ek order ke liye EK account nikaalo aur uski alag JSON file banao.
+    Delivery ke baad us account ko store_data.json se remove kar do.
+    """
     order_id = order['order_id']
-    safe_name = order['product'].replace(' ', '_')
+    product_name = order['product']
+
+    # store_data.json load karo
+    data = load_data()
+
+    # Product dhundo
+    product = None
+    for p in data['products']['json_files']:
+        if p['name'] == product_name:
+            product = p
+            break
+
+    if not product:
+        print(f"❌ Product not found: {product_name}")
+        return None, None
+
+    # Data array check karo
+    if 'data' not in product or len(product['data']) == 0:
+        print(f"❌ No stock data left for: {product_name}")
+        return None, None
+
+    # Pehla account uthao
+    account = product['data'][0]
+
+    # File banao
+    safe_name = product_name.replace(' ', '_').replace('/', '_')
     filename = f"{order_id}_{safe_name}_{index}.json"
     filepath = os.path.join(JSON_FILES_DIR, filename)
 
     with open(filepath, 'w') as f:
-        json.dump({
-            "order_id": order_id,
-            "product": order['product'],
-            "price": order['price'],
-            "quantity": 1,
-            "buyer": order.get('username', 'N/A'),
-            "delivered_at": get_indian_time()
-        }, f, indent=2)
+        json.dump(account, f, indent=2)
+
+    # ✅ Account ko data array se REMOVE karo
+    product['data'].pop(0)
+
+    # ✅ Stock bhi kam karo
+    product['stock'] = len(product['data'])
+
+    # ✅ Save karo store_data.json
+    save_data(data)
+
+    print(f"✅ Delivered account #{index} | Remaining: {product['stock']}")
 
     return filename, filepath
 
@@ -535,10 +574,13 @@ def admin_approve(call):
 
     qty = order_found['quantity']
 
-    # Create files
+    # ✅ Create files — EK account per order
     files_created = []
     for i in range(1, qty + 1):
         filename, filepath = create_single_order_file(order_found, i)
+        if filename is None:
+            bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
+            return
         files_created.append((filename, filepath))
 
     # Send delivery message
@@ -554,28 +596,19 @@ def admin_approve(call):
         try:
             with open(filepath, 'rb') as f:
                 bot.send_document(order_found['user_id'], f,
-                    caption=f"🎁 {filename}\nOrder: {order_id}")
+                    caption=f"🎁 Your Order File\n🆔 {order_id}\n📄 {filename}")
         except Exception as e:
             print(f"File send error: {e}")
 
+        # Auto-delete after sending
         try:
             os.remove(filepath)
         except:
             pass
 
-    # Update status + stock
+    # Update status (stock already updated in create_single_order_file)
     order_found['status'] = "delivered"
     order_found['delivered_at'] = get_indian_time()
-
-    try:
-        data = load_data()
-        cat_key = order_found.get('category_key', 'json_files')
-        idx = order_found.get('product_index', 0)
-        data['products'][cat_key][idx]['stock'] = max(0, data['products'][cat_key][idx]['stock'] - qty)
-        save_data(data)
-    except Exception as e:
-        print(f"Stock error: {e}")
-
     save_orders(orders)
 
     # Admin confirmation
@@ -740,6 +773,19 @@ def my_id(message):
         f"⚙️ Bot ADMIN_ID: `{ADMIN_ID}`\n"
         f"✅ Match: {message.from_user.id == ADMIN_ID}",
         parse_mode='Markdown')
+
+@bot.message_handler(commands=['stock'])
+def stock_check(message):
+    if not is_admin(message.from_user.id, message.from_user.username):
+        return
+
+    data = load_data()
+    text = "📦 STOCK STATUS\n━━━━━━━━━━━━━━\n\n"
+    for p in data['products']['json_files']:
+        stock = p.get('stock', 0)
+        data_len = len(p.get('data', []))
+        text += f"📁 {p['name']}\n   Stock: {stock} | Data: {data_len}\n\n"
+    bot.reply_to(message, text)
 
 # ============================================================
 # ===== FLASK KEEP-ALIVE =====
