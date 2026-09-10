@@ -9,7 +9,7 @@ import time
 import traceback
 import qrcode
 import io
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from flask import Flask
 import threading
 import pytz
@@ -36,25 +36,23 @@ ORDERS_FILE = "orders.json"
 JSON_FILES_DIR = "json_files/"
 BACKUP_DIR = "backups/"
 
-# ===== CREATE DIRECTORIES =====
 os.makedirs(JSON_FILES_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
 # ===== BOT INITIALIZE =====
 bot = telebot.TeleBot(TOKEN)
 
-# ===== DELETE WEBHOOK =====
 try:
     bot.delete_webhook()
     print("✅ Webhook deleted")
 except:
     pass
 
-# ===== CHECK ADMIN FUNCTION =====
+# ===== CHECK ADMIN =====
 def is_admin(user_id, username):
     return user_id == ADMIN_ID or username == CO_ADMIN_USERNAME
 
-# ===== QR CODE FUNCTION =====
+# ===== QR CODE =====
 def generate_upi_qr(upi_id, amount, name=STORE_NAME):
     try:
         upi_url = f"upi://pay?pa={upi_id}&pn={name}&am={amount}&cu=INR"
@@ -69,6 +67,51 @@ def generate_upi_qr(upi_id, amount, name=STORE_NAME):
     except Exception as e:
         print(f"QR Error: {e}")
         return None
+
+# ===== JSON PREVIEW IMAGE =====
+def create_json_preview_image(order):
+    """Create an image preview of the JSON data"""
+    text = json.dumps({
+        "order_id": order['order_id'],
+        "product": order['product'],
+        "price": order['price'],
+        "quantity": order['quantity'],
+        "buyer": order.get('username', 'N/A'),
+        "delivered_at": get_indian_time()
+    }, indent=2)
+
+    img = Image.new('RGB', (700, 450), color='white')
+    draw = ImageDraw.Draw(img)
+
+    # Try to load font
+    font = None
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/system/fonts/DroidSansMono.ttf",
+        "/data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSansMono.ttf",
+    ]
+    for fp in font_paths:
+        if os.path.exists(fp):
+            try:
+                font = ImageFont.truetype(fp, 18)
+                break
+            except:
+                pass
+
+    if font is None:
+        font = ImageFont.load_default()
+
+    # Header
+    draw.rectangle([(0, 0), (700, 60)], fill='#1e3a8a')
+    draw.text((20, 18), "PRIME STORE - ORDER DELIVERED", fill='white', font=font)
+
+    # Content
+    draw.text((30, 90), text, fill='black', font=font)
+
+    img_bytes = io.BytesIO()
+    img.save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+    return img_bytes
 
 # ===== CREATE INITIAL FILES =====
 def create_initial_files():
@@ -105,13 +148,11 @@ def save_data(data):
         backup_file = f"{BACKUP_DIR}store_data_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(backup_file, 'w') as f:
             json.dump(data, f, indent=2)
-        print(f"✅ Backup created: {backup_file}")
     except Exception as e:
         print(f"⚠️ Backup failed: {e}")
 
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=2)
-    print("✅ Data saved")
 
 def load_orders():
     with open(ORDERS_FILE, 'r') as f:
@@ -128,17 +169,17 @@ def generate_file_id():
     return "FILE" + ''.join(random.choices(string.digits, k=6))
 
 # ============================================================
-# ===== FIXED: SINGLE JSON FILE PER ORDER =====
+# ===== FIXED: SINGLE JSON FILE PER ORDER (READABLE NAME) =====
 # ============================================================
 
 def create_single_order_file(order, index=1):
     """
-    Creates ONE JSON file for ONE order.
-    Filename: order_<ORDER_ID>_<index>.json
+    Creates ONE JSON file for ONE order with a readable filename.
+    Example: ORD61640028_Meesho_205_OFF_1.json
     """
     order_id = order['order_id']
-    safe_name = order['product'].replace(' ', '_').replace('/', '_')
-    filename = f"order_{order_id}_{safe_name}_{index}.json"
+    safe_name = order['product'].replace(' ', '_').replace('/', '_').replace('\\', '_')
+    filename = f"{order_id}_{safe_name}_{index}.json"
     filepath = os.path.join(JSON_FILES_DIR, filename)
 
     with open(filepath, 'w') as f:
@@ -603,20 +644,27 @@ def process_reference(message, order_id):
             f"📞 Contact: @Prime_Blogs if delayed.",
             reply_markup=markup)
 
-        # ===== NOTIFY ADMIN =====
+        # ===== NOTIFY ADMIN WITH APPROVE/REJECT BUTTONS =====
         admin_msg = (
-            f"🔔 NEW ORDER\n━━━━━━━━━━━━━━\n\n"
-            f"🆔 Order: {order_id}\n"
-            f"👤 User: {order_found.get('username', 'N/A')}\n"
+            f"🟢 *PAYMENT RECEIVED*\n"
+            f"━━━━━━━━━━━━━━\n\n"
+            f"🆔 Order: `{order_id}`\n"
+            f"👤 User: @{order_found.get('username', 'N/A')}\n"
             f"📦 Product: {order_found['product']}\n"
-            f"📦 Quantity: {order_found['quantity']}\n"
+            f"📦 Qty: {order_found['quantity']}\n"
             f"💰 Total: ₹{order_found['total']}\n"
-            f"📝 Reference: {reference}\n\n"
-            f"✅ Approve: /approve {order_id}"
+            f"📝 Ref: {reference}\n"
+            f"🕐 Time: {get_indian_time()}"
+        )
+
+        markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            telebot.types.InlineKeyboardButton("✅ Approve", callback_data=f"admin_approve_{order_id}"),
+            telebot.types.InlineKeyboardButton("❌ Reject", callback_data=f"admin_reject_{order_id}")
         )
 
         try:
-            bot.send_message(ADMIN_ID, admin_msg)
+            bot.send_message(ADMIN_ID, admin_msg, reply_markup=markup, parse_mode='Markdown')
         except Exception as e:
             print(f"Admin notify error: {e}")
 
@@ -624,7 +672,234 @@ def process_reference(message, order_id):
         print(f"Error in process_reference: {e}")
 
 # ============================================================
-# ===== ADMIN - APPROVE ORDER (FIXED) =====
+# ===== ADMIN APPROVE (BUTTON) - FIXED =====
+# ============================================================
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('admin_approve_'))
+def admin_approve_button(call):
+    if not is_admin(call.from_user.id, call.from_user.username):
+        bot.answer_callback_query(call.id, "❌ Unauthorized!", show_alert=True)
+        return
+
+    order_id = call.data.replace('admin_approve_', '')
+
+    try:
+        orders = load_orders()
+        order_found = None
+        for order in orders['orders']:
+            if order['order_id'] == order_id:
+                order_found = order
+                break
+
+        if not order_found:
+            bot.answer_callback_query(call.id, "❌ Order not found!", show_alert=True)
+            return
+
+        if order_found['status'] == "delivered":
+            bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
+            return
+
+        qty = order_found['quantity']
+
+        # ✅ Create separate JSON file for each unit
+        files_created = []
+        for i in range(1, qty + 1):
+            filename, filepath = create_single_order_file(order_found, i)
+            files_created.append((filename, filepath))
+
+        # Deliver to user
+        bot.send_message(
+            order_found['user_id'],
+            f"✅ *ORDER DELIVERED!*\n"
+            f"━━━━━━━━━━━━━━\n\n"
+            f"🆔 Order: `{order_id}`\n"
+            f"📦 Product: {order_found['product']}\n"
+            f"🔢 Quantity: {qty}\n\n"
+            f"Thank you for shopping at Prime Store! 🎉",
+            parse_mode='Markdown'
+        )
+
+        # Send each file with caption + image preview
+        for filename, filepath in files_created:
+            # Send JSON file with caption
+            try:
+                with open(filepath, 'rb') as f:
+                    bot.send_document(
+                        order_found['user_id'],
+                        f,
+                        caption=(
+                            f"🎁 *Your File Delivered!*\n"
+                            f"━━━━━━━━━━━━━━\n\n"
+                            f"🆔 Order: `{order_id}`\n"
+                            f"📦 Product: {order_found['product']}\n"
+                            f"📄 File: `{filename}`\n"
+                            f"🕐 Time: {get_indian_time()}\n\n"
+                            f"Thank you! 🎉"
+                        ),
+                        parse_mode='Markdown'
+                    )
+            except Exception as e:
+                print(f"File send error: {e}")
+
+            # Send image preview to user
+            try:
+                preview = create_json_preview_image(order_found)
+                bot.send_photo(
+                    order_found['user_id'],
+                    preview,
+                    caption=f"📸 Preview: `{filename}`",
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                print(f"Preview send error: {e}")
+
+            # Send file to admin as confirmation
+            try:
+                with open(filepath, 'rb') as f:
+                    bot.send_document(
+                        ADMIN_ID,
+                        f,
+                        caption=f"📄 Delivered to @{order_found.get('username', 'N/A')}\nOrder: {order_id}\nFile: {filename}"
+                    )
+            except Exception as e:
+                print(f"Admin file error: {e}")
+
+            # Auto-delete file after sending
+            try:
+                delete_json_file(filepath)
+            except:
+                pass
+
+        # Update status
+        order_found['status'] = "delivered"
+        order_found['delivered_at'] = get_indian_time()
+
+        # Reduce stock
+        try:
+            data = load_data()
+            cat_key = order_found.get('category_key', 'json_files')
+            idx = order_found.get('product_index', None)
+            if idx is not None and idx < len(data['products'][cat_key]):
+                data['products'][cat_key][idx]['stock'] = max(
+                    0, data['products'][cat_key][idx]['stock'] - qty
+                )
+                save_data(data)
+        except Exception as e:
+            print(f"Stock update error: {e}")
+
+        save_orders(orders)
+
+        # ✅ Admin confirmation
+        admin_confirm = (
+            f"✅ *ORDER DELIVERED SUCCESSFULLY*\n"
+            f"━━━━━━━━━━━━━━\n\n"
+            f"🆔 Order: `{order_id}`\n"
+            f"👤 User: @{order_found.get('username', 'N/A')}\n"
+            f"📦 Product: {order_found['product']}\n"
+            f"🔢 Qty: {qty}\n"
+            f"📁 Files sent: {len(files_created)}\n"
+            f"🕐 Delivered: {get_indian_time()}"
+        )
+        try:
+            bot.send_message(ADMIN_ID, admin_confirm, parse_mode='Markdown')
+        except Exception as e:
+            print(f"Admin confirm error: {e}")
+
+        # Edit admin message - remove buttons
+        try:
+            bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=None
+            )
+            bot.send_message(
+                call.message.chat.id,
+                f"✅ Order `{order_id}` APPROVED & DELIVERED!\n"
+                f"📁 {len(files_created)} JSON file(s) sent & auto-deleted.",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            print(f"Edit error: {e}")
+
+        bot.answer_callback_query(call.id, "✅ Delivered!")
+
+    except Exception as e:
+        print(f"Error in admin_approve_button: {e}")
+        traceback.print_exc()
+        bot.answer_callback_query(call.id, "❌ Error!", show_alert=True)
+
+
+# ============================================================
+# ===== ADMIN REJECT (BUTTON) =====
+# ============================================================
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('admin_reject_'))
+def admin_reject_button(call):
+    if not is_admin(call.from_user.id, call.from_user.username):
+        bot.answer_callback_query(call.id, "❌ Unauthorized!", show_alert=True)
+        return
+
+    order_id = call.data.replace('admin_reject_', '')
+
+    try:
+        orders = load_orders()
+        order_found = None
+        for order in orders['orders']:
+            if order['order_id'] == order_id:
+                order_found = order
+                break
+
+        if not order_found:
+            bot.answer_callback_query(call.id, "❌ Order not found!", show_alert=True)
+            return
+
+        if order_found['status'] == "cancelled":
+            bot.answer_callback_query(call.id, "❌ Already rejected!", show_alert=True)
+            return
+
+        order_found['status'] = "cancelled"
+        order_found['cancelled_at'] = get_indian_time()
+        save_orders(orders)
+
+        # Notify user
+        try:
+            bot.send_message(
+                order_found['user_id'],
+                f"❌ *ORDER REJECTED*\n"
+                f"━━━━━━━━━━━━━━\n\n"
+                f"🆔 {order_id}\n"
+                f"📦 {order_found['product']}\n\n"
+                f"Payment could not be verified.\n"
+                f"📞 Contact: @Prime_Blogs for help.",
+                parse_mode='Markdown'
+            )
+        except:
+            pass
+
+        # Edit admin message
+        try:
+            bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=None
+            )
+            bot.send_message(
+                call.message.chat.id,
+                f"❌ Order `{order_id}` REJECTED.",
+                parse_mode='Markdown'
+            )
+        except:
+            pass
+
+        bot.answer_callback_query(call.id, "❌ Rejected!")
+
+    except Exception as e:
+        print(f"Error in admin_reject_button: {e}")
+        bot.answer_callback_query(call.id, "❌ Error!", show_alert=True)
+
+
+# ============================================================
+# ===== ADMIN COMMAND: /approve (Backup) =====
 # ============================================================
 
 @bot.message_handler(commands=['approve'])
@@ -656,41 +931,70 @@ def approve_order(message):
             bot.reply_to(message, "✅ Already delivered!")
             return
 
-        # ✅ FIX: Har unit ke liye ALAG JSON file banao
-        files_created = []
         qty = order_found['quantity']
+
+        files_created = []
         for i in range(1, qty + 1):
             filename, filepath = create_single_order_file(order_found, i)
             files_created.append((filename, filepath))
 
-        # ✅ Deliver all files
         bot.send_message(
             order_found['user_id'],
-            f"✅ ORDER DELIVERED!\n━━━━━━━━━━━━━━\n\n"
-            f"🆔 {order_id}\n"
+            f"✅ *ORDER DELIVERED!*\n"
+            f"━━━━━━━━━━━━━━\n\n"
+            f"🆔 `{order_id}`\n"
             f"📦 {order_found['product']}\n"
-            f"📦 Quantity: {qty}\n\n"
-            f"Thank you for shopping at Prime Store!"
+            f"🔢 Quantity: {qty}\n\n"
+            f"Thank you for shopping at Prime Store! 🎉",
+            parse_mode='Markdown'
         )
 
         for filename, filepath in files_created:
             try:
                 with open(filepath, 'rb') as f:
-                    bot.send_document(order_found['user_id'], f)
+                    bot.send_document(
+                        order_found['user_id'],
+                        f,
+                        caption=(
+                            f"🎁 *Your File Delivered!*\n"
+                            f"🆔 `{order_id}`\n"
+                            f"📦 {order_found['product']}\n"
+                            f"📄 `{filename}`"
+                        ),
+                        parse_mode='Markdown'
+                    )
             except Exception as e:
                 print(f"File send error: {e}")
 
-            # Auto-delete after sending
+            try:
+                preview = create_json_preview_image(order_found)
+                bot.send_photo(
+                    order_found['user_id'],
+                    preview,
+                    caption=f"📸 Preview: `{filename}`",
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                print(f"Preview error: {e}")
+
+            try:
+                with open(filepath, 'rb') as f:
+                    bot.send_document(
+                        ADMIN_ID,
+                        f,
+                        caption=f"📄 Delivered to @{order_found.get('username', 'N/A')}\nOrder: {order_id}\nFile: {filename}"
+                    )
+            except:
+                pass
+
             try:
                 delete_json_file(filepath)
             except:
                 pass
 
-        # Update order status
         order_found['status'] = "delivered"
         order_found['delivered_at'] = get_indian_time()
 
-        # ✅ Stock kam karo
         try:
             data = load_data()
             cat_key = order_found.get('category_key', 'json_files')
@@ -707,8 +1011,9 @@ def approve_order(message):
 
         bot.reply_to(
             message,
-            f"✅ Order {order_id} delivered!\n"
-            f"📁 {qty} JSON file(s) sent & auto-deleted."
+            f"✅ Order `{order_id}` delivered!\n"
+            f"📁 {len(files_created)} JSON file(s) sent & auto-deleted.",
+            parse_mode='Markdown'
         )
 
     except Exception as e:
@@ -838,8 +1143,7 @@ def admin_panel(message):
         f"🎫 Coupons: {coupon_stock}\n\n"
         f"⚙️ Commands:\n"
         f"/pending - View pending orders\n"
-        f"/approve ORDER_ID - Deliver order\n"
-        f"/addstock - Add stock\n"
+        f"/approve ORDER_ID - Deliver (backup)\n"
         f"/stats - View stats"
     )
 
@@ -862,8 +1166,7 @@ def pending_orders(message):
             f"👤 {o.get('username', 'N/A')}\n"
             f"📦 {o['product']} x{o['quantity']}\n"
             f"💰 ₹{o['total']}\n"
-            f"📝 Ref: {o.get('reference', 'N/A')}\n"
-            f"✅ /approve {o['order_id']}\n\n"
+            f"📝 Ref: {o.get('reference', 'N/A')}\n\n"
         )
 
     bot.reply_to(message, text)
@@ -887,7 +1190,7 @@ def stats(message):
     )
 
 # ============================================================
-# ===== FLASK KEEP-ALIVE (for Render/Replit) =====
+# ===== FLASK KEEP-ALIVE =====
 # ============================================================
 
 app = Flask(__name__)
