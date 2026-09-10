@@ -70,12 +70,7 @@ def generate_upi_qr(upi_id, amount, name=STORE_NAME):
 # ===== INITIAL FILES =====
 def create_initial_files():
     if not os.path.exists(DATA_FILE):
-        data = {
-            "products": {
-                "coupons": [],
-                "json_files": []
-            }
-        }
+        data = {"products": {"coupons": [], "json_files": []}}
         with open(DATA_FILE, 'w') as f:
             json.dump(data, f, indent=2)
         print("✅ Created store_data.json")
@@ -115,21 +110,20 @@ def generate_order_id():
     return "ORD" + ''.join(random.choices(string.digits, k=8))
 
 # ============================================================
-# ===== FIXED: SINGLE ACCOUNT PER ORDER =====
+# ===== FIXED: SINGLE ACCOUNT PER ORDER (READABLE NAME) =====
 # ============================================================
 
 def create_single_order_file(order, index=1):
     """
     Ek order ke liye EK account nikaalo aur uski alag JSON file banao.
-    Delivery ke baad us account ko store_data.json se remove kar do.
+    Filename mobile number se: meesho_account_<mobile>.json
+    Returns: (filename, filepath, mobile)
     """
     order_id = order['order_id']
     product_name = order['product']
 
-    # store_data.json load karo
     data = load_data()
 
-    # Product dhundo
     product = None
     for p in data['products']['json_files']:
         if p['name'] == product_name:
@@ -138,36 +132,34 @@ def create_single_order_file(order, index=1):
 
     if not product:
         print(f"❌ Product not found: {product_name}")
-        return None, None
+        return None, None, None
 
-    # Data array check karo
     if 'data' not in product or len(product['data']) == 0:
         print(f"❌ No stock data left for: {product_name}")
-        return None, None
+        return None, None, None
 
     # Pehla account uthao
     account = product['data'][0]
 
-    # File banao
-    safe_name = product_name.replace(' ', '_').replace('/', '_')
-    filename = f"{order_id}_{safe_name}_{index}.json"
+    # ✅ Mobile number nikaalo filename ke liye
+    mobile = account.get('mobile', account.get('phone', 'unknown'))
+    mobile_clean = str(mobile).replace('+', '').replace(' ', '').replace('-', '')
+
+    # ✅ Filename mobile-based (readable)
+    filename = f"meesho_account_{mobile_clean}.json"
     filepath = os.path.join(JSON_FILES_DIR, filename)
 
     with open(filepath, 'w') as f:
         json.dump(account, f, indent=2)
 
-    # ✅ Account ko data array se REMOVE karo
+    # Account remove
     product['data'].pop(0)
-
-    # ✅ Stock bhi kam karo
     product['stock'] = len(product['data'])
-
-    # ✅ Save karo store_data.json
     save_data(data)
 
-    print(f"✅ Delivered account #{index} | Remaining: {product['stock']}")
+    print(f"✅ Delivered account: {mobile} | Remaining: {product['stock']}")
 
-    return filename, filepath
+    return filename, filepath, mobile
 
 # ============================================================
 # ===== MAIN MENU =====
@@ -439,8 +431,7 @@ def cancel_order(call):
     except:
         pass
 
-    bot.send_message(call.message.chat.id,
-        f"❌ Order {order_id} cancelled.")
+    bot.send_message(call.message.chat.id, f"❌ Order {order_id} cancelled.")
     bot.answer_callback_query(call.id, "❌ Cancelled!")
 
 # ============================================================
@@ -506,7 +497,6 @@ def process_reference(message, order_id):
         print(f"✅ Reference saved: {order_id} = {reference}")
         print(f"{'='*50}\n")
 
-        # User confirmation
         bot.send_message(message.chat.id,
             f"✅ PAYMENT SUBMITTED!\n━━━━━━━━━━━━━━\n\n"
             f"🆔 Order: {order_id}\n"
@@ -576,47 +566,95 @@ def admin_approve(call):
 
     # ✅ Create files — EK account per order
     files_created = []
+    mobiles_delivered = []
     for i in range(1, qty + 1):
-        filename, filepath = create_single_order_file(order_found, i)
+        filename, filepath, mobile = create_single_order_file(order_found, i)
         if filename is None:
             bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
             return
         files_created.append((filename, filepath))
+        mobiles_delivered.append(mobile)
 
-    # Send delivery message
-    bot.send_message(order_found['user_id'],
-        f"✅ ORDER DELIVERED!\n━━━━━━━━━━━━━━\n\n"
-        f"🆔 {order_id}\n"
-        f"📦 {order_found['product']}\n"
+    # ✅ Mobile list for messages
+    mobile_list = "\n".join([f"   • 📱 `{m}`" for m in mobiles_delivered])
+
+    # ✅ Delivery summary to customer
+    bot.send_message(
+        order_found['user_id'],
+        f"✅ *ORDER DELIVERED!*\n"
+        f"━━━━━━━━━━━━━━\n\n"
+        f"🆔 Order: `{order_id}`\n"
+        f"📦 Product: {order_found['product']}\n"
         f"🔢 Quantity: {qty}\n\n"
-        f"Thank you for shopping at Prime Store! 🎉")
+        f"📱 *Accounts Delivered:*\n{mobile_list}\n\n"
+        f"Thank you for shopping at Prime Store! 🎉",
+        parse_mode='Markdown'
+    )
 
-    # Send files
+    # ✅ Send files to customer with detailed caption
     for filename, filepath in files_created:
         try:
             with open(filepath, 'rb') as f:
-                bot.send_document(order_found['user_id'], f,
-                    caption=f"🎁 Your Order File\n🆔 {order_id}\n📄 {filename}")
+                bot.send_document(
+                    order_found['user_id'],
+                    f,
+                    caption=(
+                        f"🎁 *Your Order File*\n"
+                        f"━━━━━━━━━━━━━━\n\n"
+                        f"🆔 Order: `{order_id}`\n"
+                        f"📦 {order_found['product']}\n"
+                        f"📄 File: `{filename}`\n"
+                        f"🕐 Time: {get_indian_time()}\n\n"
+                        f"Thank you! 🎉"
+                    ),
+                    parse_mode='Markdown'
+                )
         except Exception as e:
             print(f"File send error: {e}")
 
-        # Auto-delete after sending
-        try:
-            os.remove(filepath)
-        except:
-            pass
-
-    # Update status (stock already updated in create_single_order_file)
+    # Update status
     order_found['status'] = "delivered"
     order_found['delivered_at'] = get_indian_time()
     save_orders(orders)
 
-    # Admin confirmation
-    bot.send_message(ADMIN_ID,
-        f"✅ DELIVERED!\n"
-        f"🆔 {order_id}\n"
-        f"📦 {order_found['product']}\n"
-        f"🔢 Qty: {qty}")
+    # ✅ Admin confirmation with details
+    admin_confirm = (
+        f"✅ *ORDER DELIVERED*\n"
+        f"━━━━━━━━━━━━━━\n\n"
+        f"🆔 Order: `{order_id}`\n"
+        f"👤 User: @{order_found.get('username', 'N/A')}\n"
+        f"📦 Product: {order_found['product']}\n"
+        f"🔢 Qty: {qty}\n\n"
+        f"📱 *Accounts Delivered:*\n{mobile_list}\n\n"
+        f"🕐 Time: {get_indian_time()}"
+    )
+
+    try:
+        bot.send_message(ADMIN_ID, admin_confirm, parse_mode='Markdown')
+    except Exception as e:
+        print(f"Admin confirm error: {e}")
+
+    # ✅ Send files to admin as backup (before deleting)
+    for filename, filepath in files_created:
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'rb') as f:
+                    bot.send_document(
+                        ADMIN_ID,
+                        f,
+                        caption=f"📄 Delivered to @{order_found.get('username', 'N/A')}\nFile: {filename}"
+                    )
+            except Exception as e:
+                print(f"Admin file error: {e}")
+
+    # ✅ Now delete files (after both customer and admin got them)
+    for filename, filepath in files_created:
+        try:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+                print(f"🗑️ Deleted: {filename}")
+        except:
+            pass
 
     try:
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
