@@ -110,22 +110,25 @@ def generate_order_id():
     return "ORD" + ''.join(random.choices(string.digits, k=8))
 
 # ============================================================
-# ===== FIXED: SINGLE ACCOUNT PER ORDER (READABLE NAME) =====
+# ===== CREATE ITEM (JSON FILE or COUPON CODE) =====
 # ============================================================
 
 def create_single_order_file(order, index=1):
     """
-    Ek order ke liye EK account nikaalo aur uski alag JSON file banao.
-    Filename mobile number se: meesho_account_<mobile>.json
-    Returns: (filename, filepath, mobile)
+    Ek order ke liye:
+    - JSON files: store_data.json se ek account uthao, file banao
+    - Coupons: sirf code uthao, file nahi banegi
+    Returns: (filename, filepath, item_id)
     """
     order_id = order['order_id']
     product_name = order['product']
+    category_key = order.get('category_key', 'json_files')
 
     data = load_data()
 
+    # Product dhundo
     product = None
-    for p in data['products']['json_files']:
+    for p in data['products'][category_key]:
         if p['name'] == product_name:
             product = p
             break
@@ -138,27 +141,36 @@ def create_single_order_file(order, index=1):
         print(f"❌ No stock data left for: {product_name}")
         return None, None, None
 
-    # Pehla account uthao
-    account = product['data'][0]
+    # Pehla item uthao
+    item = product['data'][0]
 
-    # ✅ Mobile number nikaalo filename ke liye
-    mobile = account.get('mobile', account.get('phone', 'unknown'))
+    # ===== COUPON: sirf code return karo, file nahi banao =====
+    if category_key == 'coupons':
+        code = item.get('code', 'UNKNOWN')
+
+        # Stock kam karo
+        product['data'].pop(0)
+        product['stock'] = len(product['data'])
+        save_data(data)
+
+        print(f"✅ Delivered coupon: {code} | Remaining: {product['stock']}")
+        return None, None, code
+
+    # ===== JSON ACCOUNT: file banao =====
+    mobile = item.get('mobile', item.get('phone', 'unknown'))
     mobile_clean = str(mobile).replace('+', '').replace(' ', '').replace('-', '')
 
-    # ✅ Filename mobile-based (readable)
     filename = f"meesho_account_{mobile_clean}.json"
     filepath = os.path.join(JSON_FILES_DIR, filename)
 
     with open(filepath, 'w') as f:
-        json.dump(account, f, indent=2)
+        json.dump(item, f, indent=2)
 
-    # Account remove
     product['data'].pop(0)
     product['stock'] = len(product['data'])
     save_data(data)
 
     print(f"✅ Delivered account: {mobile} | Remaining: {product['stock']}")
-
     return filename, filepath, mobile
 
 # ============================================================
@@ -239,7 +251,12 @@ def cat_coupons(call):
     for i, p in enumerate(products):
         stock = p.get('stock', 0)
         emoji = "🟢" if stock > 0 else "🔴"
-        markup.add(telebot.types.InlineKeyboardButton(f"{emoji} {p['name']} - ₹{p['price']} ({stock})", callback_data=f"buy_coupon_{i}"))
+        sub = p.get('sub_category', '')
+        display = f"{p['name']} - {sub}" if sub else p['name']
+        markup.add(telebot.types.InlineKeyboardButton(
+            f"{emoji} {display} - ₹{p['price']} ({stock})",
+            callback_data=f"buy_coupon_{i}"
+        ))
     markup.add(
         telebot.types.InlineKeyboardButton("🔙 Back", callback_data="shop"),
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
@@ -465,7 +482,7 @@ def payment_done(call):
     bot.register_next_step_handler(msg, process_reference, order_id)
 
 # ============================================================
-# ===== PROCESS REFERENCE - ADMIN NOTIFY =====
+# ===== PROCESS REFERENCE =====
 # ============================================================
 
 def process_reference(message, order_id):
@@ -546,7 +563,6 @@ def admin_approve(call):
         return
 
     order_id = call.data.replace('approve_', '')
-
     orders = load_orders()
     order_found = None
     for order in orders['orders']:
@@ -563,99 +579,127 @@ def admin_approve(call):
         return
 
     qty = order_found['quantity']
+    category_key = order_found.get('category_key', 'json_files')
 
-    # ✅ Create files — EK account per order
+    # Create items
     files_created = []
-    mobiles_delivered = []
+    items_delivered = []
     for i in range(1, qty + 1):
-        filename, filepath, mobile = create_single_order_file(order_found, i)
-        if filename is None:
+        filename, filepath, item_id = create_single_order_file(order_found, i)
+        if item_id is None:
             bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
             return
-        files_created.append((filename, filepath))
-        mobiles_delivered.append(mobile)
+        if filename is not None:
+            files_created.append((filename, filepath))
+        items_delivered.append(item_id)
 
-    # ✅ Mobile list for messages
-    mobile_list = "\n".join([f"   • 📱 `{m}`" for m in mobiles_delivered])
+    # ===== COUPON: sirf codes bhejo (koi file nahi) =====
+    if category_key == 'coupons':
+        code_list = "\n".join([f"🔑 `{c}`" for c in items_delivered])
 
-    # ✅ Delivery summary to customer
-    bot.send_message(
-        order_found['user_id'],
-        f"✅ *ORDER DELIVERED!*\n"
-        f"━━━━━━━━━━━━━━\n\n"
-        f"🆔 Order: `{order_id}`\n"
-        f"📦 Product: {order_found['product']}\n"
-        f"🔢 Quantity: {qty}\n\n"
-        f"📱 *Accounts Delivered:*\n{mobile_list}\n\n"
-        f"Thank you for shopping at Prime Store! 🎉",
-        parse_mode='Markdown'
-    )
+        # Customer ko
+        bot.send_message(
+            order_found['user_id'],
+            f"🎉 *Payment Successful!*\n\n"
+            f"🧾 Order: `{order_id}`\n\n"
+            f"{code_list}",
+            parse_mode='Markdown'
+        )
 
-    # ✅ Send files to customer with detailed caption
-    for filename, filepath in files_created:
+        # Admin ko
+        admin_msg = (
+            f"✅ *COUPON DELIVERED*\n"
+            f"━━━━━━━━━━━━━━\n\n"
+            f"🆔 Order: `{order_id}`\n"
+            f"👤 User: @{order_found.get('username', 'N/A')}\n"
+            f"📦 Product: {order_found['product']}\n"
+            f"🔢 Qty: {qty}\n\n"
+            f"🔑 *Codes Delivered:*\n{code_list}\n\n"
+            f"🕐 Time: {get_indian_time()}"
+        )
         try:
-            with open(filepath, 'rb') as f:
-                bot.send_document(
-                    order_found['user_id'],
-                    f,
-                    caption=(
-                        f"🎁 *Your Order File*\n"
-                        f"━━━━━━━━━━━━━━\n\n"
-                        f"🆔 Order: `{order_id}`\n"
-                        f"📦 {order_found['product']}\n"
-                        f"📄 File: `{filename}`\n"
-                        f"🕐 Time: {get_indian_time()}\n\n"
-                        f"Thank you! 🎉"
-                    ),
-                    parse_mode='Markdown'
-                )
+            bot.send_message(ADMIN_ID, admin_msg, parse_mode='Markdown')
         except Exception as e:
-            print(f"File send error: {e}")
+            print(f"Admin notify error: {e}")
 
-    # Update status
+    # ===== JSON FILES: file + caption =====
+    else:
+        item_list = "\n".join([f"   • 📱 `{m}`" for m in items_delivered])
+
+        bot.send_message(
+            order_found['user_id'],
+            f"✅ *ORDER DELIVERED!*\n"
+            f"━━━━━━━━━━━━━━\n\n"
+            f"🆔 Order: `{order_id}`\n"
+            f"📦 Product: {order_found['product']}\n"
+            f"🔢 Quantity: {qty}\n\n"
+            f"📱 *Accounts Delivered:*\n{item_list}\n\n"
+            f"Thank you for shopping at Prime Store! 🎉",
+            parse_mode='Markdown'
+        )
+
+        for filename, filepath in files_created:
+            try:
+                with open(filepath, 'rb') as f:
+                    bot.send_document(
+                        order_found['user_id'],
+                        f,
+                        caption=(
+                            f"🎁 *Your Order File*\n"
+                            f"━━━━━━━━━━━━━━\n\n"
+                            f"🆔 Order: `{order_id}`\n"
+                            f"📦 {order_found['product']}\n"
+                            f"📄 File: `{filename}`\n"
+                            f"🕐 Time: {get_indian_time()}\n\n"
+                            f"Thank you! 🎉"
+                        ),
+                        parse_mode='Markdown'
+                    )
+            except Exception as e:
+                print(f"File send error: {e}")
+
+        admin_msg = (
+            f"✅ *ORDER DELIVERED*\n"
+            f"━━━━━━━━━━━━━━\n\n"
+            f"🆔 Order: `{order_id}`\n"
+            f"👤 User: @{order_found.get('username', 'N/A')}\n"
+            f"📦 Product: {order_found['product']}\n"
+            f"🔢 Qty: {qty}\n\n"
+            f"📱 *Accounts Delivered:*\n{item_list}\n\n"
+            f"🕐 Time: {get_indian_time()}"
+        )
+        try:
+            bot.send_message(ADMIN_ID, admin_msg, parse_mode='Markdown')
+        except Exception as e:
+            print(f"Admin notify error: {e}")
+
+        # Admin ko files bhi
+        for filename, filepath in files_created:
+            if os.path.exists(filepath):
+                try:
+                    with open(filepath, 'rb') as f:
+                        bot.send_document(
+                            ADMIN_ID,
+                            f,
+                            caption=f"📄 Delivered to @{order_found.get('username', 'N/A')}"
+                        )
+                except:
+                    pass
+
+    # Update order status
     order_found['status'] = "delivered"
     order_found['delivered_at'] = get_indian_time()
     save_orders(orders)
 
-    # ✅ Admin confirmation with details
-    admin_confirm = (
-        f"✅ *ORDER DELIVERED*\n"
-        f"━━━━━━━━━━━━━━\n\n"
-        f"🆔 Order: `{order_id}`\n"
-        f"👤 User: @{order_found.get('username', 'N/A')}\n"
-        f"📦 Product: {order_found['product']}\n"
-        f"🔢 Qty: {qty}\n\n"
-        f"📱 *Accounts Delivered:*\n{mobile_list}\n\n"
-        f"🕐 Time: {get_indian_time()}"
-    )
-
-    try:
-        bot.send_message(ADMIN_ID, admin_confirm, parse_mode='Markdown')
-    except Exception as e:
-        print(f"Admin confirm error: {e}")
-
-    # ✅ Send files to admin as backup (before deleting)
-    for filename, filepath in files_created:
-        if os.path.exists(filepath):
-            try:
-                with open(filepath, 'rb') as f:
-                    bot.send_document(
-                        ADMIN_ID,
-                        f,
-                        caption=f"📄 Delivered to @{order_found.get('username', 'N/A')}\nFile: {filename}"
-                    )
-            except Exception as e:
-                print(f"Admin file error: {e}")
-
-    # ✅ Now delete files (after both customer and admin got them)
+    # Delete temporary files
     for filename, filepath in files_created:
         try:
             if os.path.exists(filepath):
                 os.remove(filepath)
-                print(f"🗑️ Deleted: {filename}")
         except:
             pass
 
+    # Remove inline buttons
     try:
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
     except:
@@ -674,7 +718,6 @@ def admin_reject(call):
         return
 
     order_id = call.data.replace('reject_', '')
-
     orders = load_orders()
     for order in orders['orders']:
         if order['order_id'] == order_id:
@@ -819,11 +862,17 @@ def stock_check(message):
 
     data = load_data()
     text = "📦 STOCK STATUS\n━━━━━━━━━━━━━━\n\n"
+    text += "🎫 *COUPONS:*\n"
+    for p in data['products']['coupons']:
+        sub = p.get('sub_category', '')
+        display = f"{p['name']} - {sub}" if sub else p['name']
+        text += f"   {display}: {p.get('stock', 0)} (₹{p['price']})\n"
+    
+    text += "\n📁 *JSON FILES:*\n"
     for p in data['products']['json_files']:
-        stock = p.get('stock', 0)
-        data_len = len(p.get('data', []))
-        text += f"📁 {p['name']}\n   Stock: {stock} | Data: {data_len}\n\n"
-    bot.reply_to(message, text)
+        text += f"   {p['name']}: {p.get('stock', 0)} (₹{p['price']})\n"
+    
+    bot.reply_to(message, text, parse_mode='Markdown')
 
 # ============================================================
 # ===== FLASK KEEP-ALIVE =====
