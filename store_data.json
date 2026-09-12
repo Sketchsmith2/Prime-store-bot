@@ -1,6 +1,48 @@
 {
   "products": {
-    "coupons": [],
+    "coupons": [
+      {
+        "name": "Bigbasket",
+        "sub_category": "160 CB on 349",
+        "price": 5,
+        "stock": 11,
+        "data": [
+          {
+            "code": "BBCHCBFO2-008WFWUJ6ZHBT1H"
+          },
+          {
+            "code": "BBCHCBFO2-03DH0GGN5CU96UA"
+          },
+          {
+            "code": "BBCHCBFO2-04FYW67Z2696VQ3"
+          },
+          {
+            "code": "BBCHCBFO2-01GKK28HDY48C7K"
+          },
+          {
+            "code": "BBCHCBFO2-057VR7YU8Z10PYU"
+          },
+          {
+            "code": "BBCHCBFO2-05CWNPT7KGV93CU"
+          },
+          {
+            "code": "BBCHCBFO2-01MMX7U6NT8FUZ9"
+          },
+          {
+            "code": "BBCHCBFO2-01WB4NJVQ1CZDJM"
+          },
+          {
+            "code": "BBCHCBFO2-05ZK2E922R8N2C2"
+          },
+          {
+            "code": "BBCHCBFO2-02XVK09CNEVTV9Z"
+          },
+          {
+            "code": "BBCHCBFO1-0HEQ8K5RX07QX03"
+          }
+        ]
+      }
+    ],
     "json_files": [
       {
         "name": "Bigbasket JSON",
