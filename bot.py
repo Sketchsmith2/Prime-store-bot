@@ -144,15 +144,12 @@ def create_single_order_file(order, index=1):
     # Pehla item uthao
     item = product['data'][0]
 
-    # ===== COUPON: sirf code return karo, file nahi banao =====
+    # ===== COUPON: sirf code return karo =====
     if category_key == 'coupons':
         code = item.get('code', 'UNKNOWN')
-
-        # Stock kam karo
         product['data'].pop(0)
         product['stock'] = len(product['data'])
         save_data(data)
-
         print(f"✅ Delivered coupon: {code} | Remaining: {product['stock']}")
         return None, None, code
 
@@ -553,7 +550,7 @@ def process_reference(message, order_id):
         traceback.print_exc()
 
 # ============================================================
-# ===== ADMIN APPROVE BUTTON =====
+# ===== ADMIN APPROVE BUTTON (WITH ADMIN NOTIFICATION) =====
 # ============================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
@@ -593,52 +590,81 @@ def admin_approve(call):
             files_created.append((filename, filepath))
         items_delivered.append(item_id)
 
-    # ===== COUPON: sirf codes bhejo (koi file nahi) =====
+    # ============================================================
+    # ===== COUPON: sirf codes bhejo + admin ko bhi =====
+    # ============================================================
     if category_key == 'coupons':
         code_list = "\n".join([f"🔑 `{c}`" for c in items_delivered])
+        plain_code_list = "\n".join([f"🔑 {c}" for c in items_delivered])
 
-        # Customer ko
-        bot.send_message(
-            order_found['user_id'],
-            f"🎉 *Payment Successful!*\n\n"
-            f"🧾 Order: `{order_id}`\n\n"
-            f"{code_list}",
-            parse_mode='Markdown'
-        )
-
-        # Admin ko
-        admin_msg = (
-            f"✅ *COUPON DELIVERED*\n"
-            f"━━━━━━━━━━━━━━\n\n"
-            f"🆔 Order: `{order_id}`\n"
-            f"👤 User: @{order_found.get('username', 'N/A')}\n"
-            f"📦 Product: {order_found['product']}\n"
-            f"🔢 Qty: {qty}\n\n"
-            f"🔑 *Codes Delivered:*\n{code_list}\n\n"
-            f"🕐 Time: {get_indian_time()}"
-        )
+        # ===== CUSTOMER KO =====
         try:
+            bot.send_message(
+                order_found['user_id'],
+                f"🎉 *Payment Successful!*\n\n"
+                f"🧾 Order: `{order_id}`\n\n"
+                f"{code_list}",
+                parse_mode='Markdown'
+            )
+            print(f"✅ Customer notified: {items_delivered}")
+        except Exception as e:
+            print(f"❌ Customer notify FAILED: {e}")
+
+        # ===== ADMIN KO (YEH PART PEHLE MISSING THA) =====
+        try:
+            admin_msg = (
+                f"✅ *COUPON DELIVERED*\n"
+                f"━━━━━━━━━━━━━━\n\n"
+                f"🆔 Order: `{order_id}`\n"
+                f"👤 User: @{order_found.get('username', 'N/A')}\n"
+                f"📦 Product: {order_found['product']}\n"
+                f"🔢 Qty: {qty}\n\n"
+                f"🔑 *Codes Delivered:*\n{code_list}\n\n"
+                f"🕐 Time: {get_indian_time()}"
+            )
             bot.send_message(ADMIN_ID, admin_msg, parse_mode='Markdown')
             print(f"✅ Admin notified: {items_delivered}")
         except Exception as e:
             print(f"❌ Admin notify FAILED: {e}")
+            # Fallback without markdown
+            try:
+                bot.send_message(
+                    ADMIN_ID,
+                    f"✅ COUPON DELIVERED\n\n"
+                    f"Order: {order_id}\n"
+                    f"User: @{order_found.get('username', 'N/A')}\n"
+                    f"Product: {order_found['product']}\n"
+                    f"Qty: {qty}\n\n"
+                    f"Codes:\n{plain_code_list}\n\n"
+                    f"Time: {get_indian_time()}"
+                )
+                print(f"✅ Admin notified (fallback): {items_delivered}")
+            except Exception as e2:
+                print(f"❌ Admin fallback FAILED: {e2}")
 
-    # ===== JSON FILES: file + caption =====
+    # ============================================================
+    # ===== JSON FILES: file + caption + admin ko copy =====
+    # ============================================================
     else:
         item_list = "\n".join([f"   • 📱 `{m}`" for m in items_delivered])
 
-        bot.send_message(
-            order_found['user_id'],
-            f"✅ *ORDER DELIVERED!*\n"
-            f"━━━━━━━━━━━━━━\n\n"
-            f"🆔 Order: `{order_id}`\n"
-            f"📦 Product: {order_found['product']}\n"
-            f"🔢 Quantity: {qty}\n\n"
-            f"📱 *Accounts Delivered:*\n{item_list}\n\n"
-            f"Thank you for shopping at Prime Store! 🎉",
-            parse_mode='Markdown'
-        )
+        # ===== CUSTOMER KO =====
+        try:
+            bot.send_message(
+                order_found['user_id'],
+                f"✅ *ORDER DELIVERED!*\n"
+                f"━━━━━━━━━━━━━━\n\n"
+                f"🆔 Order: `{order_id}`\n"
+                f"📦 Product: {order_found['product']}\n"
+                f"🔢 Quantity: {qty}\n\n"
+                f"📱 *Accounts Delivered:*\n{item_list}\n\n"
+                f"Thank you for shopping at Prime Store! 🎉",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            print(f"Customer notify error: {e}")
 
+        # Send files to customer
         for filename, filepath in files_created:
             try:
                 with open(filepath, 'rb') as f:
@@ -659,20 +685,22 @@ def admin_approve(call):
             except Exception as e:
                 print(f"File send error: {e}")
 
-        admin_msg = (
-            f"✅ *ORDER DELIVERED*\n"
-            f"━━━━━━━━━━━━━━\n\n"
-            f"🆔 Order: `{order_id}`\n"
-            f"👤 User: @{order_found.get('username', 'N/A')}\n"
-            f"📦 Product: {order_found['product']}\n"
-            f"🔢 Qty: {qty}\n\n"
-            f"📱 *Accounts Delivered:*\n{item_list}\n\n"
-            f"🕐 Time: {get_indian_time()}"
-        )
+        # ===== ADMIN KO =====
         try:
+            admin_msg = (
+                f"✅ *ORDER DELIVERED*\n"
+                f"━━━━━━━━━━━━━━\n\n"
+                f"🆔 Order: `{order_id}`\n"
+                f"👤 User: @{order_found.get('username', 'N/A')}\n"
+                f"📦 Product: {order_found['product']}\n"
+                f"🔢 Qty: {qty}\n\n"
+                f"📱 *Accounts Delivered:*\n{item_list}\n\n"
+                f"🕐 Time: {get_indian_time()}"
+            )
             bot.send_message(ADMIN_ID, admin_msg, parse_mode='Markdown')
+            print(f"✅ Admin notified for {order_id}")
         except Exception as e:
-            print(f"Admin notify error: {e}")
+            print(f"❌ Admin notify FAILED: {e}")
 
         # Admin ko files bhi
         for filename, filepath in files_created:
@@ -684,8 +712,8 @@ def admin_approve(call):
                             f,
                             caption=f"📄 Delivered to @{order_found.get('username', 'N/A')}"
                         )
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Admin file error: {e}")
 
     # Update order status
     order_found['status'] = "delivered"
@@ -868,11 +896,11 @@ def stock_check(message):
         sub = p.get('sub_category', '')
         display = f"{p['name']} - {sub}" if sub else p['name']
         text += f"   {display}: {p.get('stock', 0)} (₹{p['price']})\n"
-    
+
     text += "\n📁 *JSON FILES:*\n"
     for p in data['products']['json_files']:
         text += f"   {p['name']}: {p.get('stock', 0)} (₹{p['price']})\n"
-    
+
     bot.reply_to(message, text, parse_mode='Markdown')
 
 # ============================================================
