@@ -103,13 +103,6 @@
         ]
       },
       {
-        "name": "Premium JSON",
-        "price": 45,
-        "stock": 0,
-        "custom_message": "\u274c Premium JSON\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n\u26a0\ufe0f Currently Out of Stock!\n\n\ud83d\udd04 New stock coming soon.\n\n\ud83d\udcde Contact: @Prime_Blogs",
-        "data": []
-      },
-      {
         "name": "Meesho 120 OFF",
         "price": 30,
         "stock": 0,
