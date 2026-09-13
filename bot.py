@@ -619,8 +619,9 @@ def admin_approve(call):
         )
         try:
             bot.send_message(ADMIN_ID, admin_msg, parse_mode='Markdown')
+            print(f"✅ Admin notified: {items_delivered}")
         except Exception as e:
-            print(f"Admin notify error: {e}")
+            print(f"❌ Admin notify FAILED: {e}")
 
     # ===== JSON FILES: file + caption =====
     else:
