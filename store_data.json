@@ -5,12 +5,8 @@
         "name": "Bigbasket",
         "sub_category": "160 CB on 349",
         "price": 5,
-        "stock": 1,
-        "data": [
-          {
-            "code": "BBCHCBFO1-0HEQ8K5RX07QX03"
-          }
-        ]
+        "stock": 0,
+        "data": []
       }
     ],
     "json_files": [
