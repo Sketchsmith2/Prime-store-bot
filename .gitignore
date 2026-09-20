@@ -5,3 +5,7 @@ Premium.txt
 nohup.out
 json_files/*.json
 backups/
+json_files/*.json
+backups/
+*.py
+store_data_backup_*.json
