@@ -156,19 +156,34 @@ def create_single_order_file(order, index=1):
         return None, None, code
 
     # ===== JSON ACCOUNT: file banao =====
-    # ✅ Identifier nikalo — mobile, phone, ya mId
+    # Product name ke hisaab se prefix decide karo
+    product_lower = product_name.lower()
+    if 'flipkart' in product_lower:
+        prefix = 'flipkart'
+    elif 'bigbasket' in product_lower:
+        prefix = 'bigbasket'
+    elif 'meesho 120' in product_lower:
+        prefix = 'meesho_120'
+    elif 'meesho 175' in product_lower:
+        prefix = 'meesho_175'
+    elif 'meesho 195' in product_lower:
+        prefix = 'meesho_195'
+    elif 'meesho' in product_lower:
+        prefix = 'meesho'
+    else:
+        prefix = 'account'
+
+    # Identifier nikalo (mobile / phone / mId / accountId)
     if item.get('mobile'):
         identifier = str(item['mobile']).replace('+', '').replace(' ', '').replace('-', '')
-        prefix = "meesho_account"
     elif item.get('phone'):
         identifier = str(item['phone']).replace('+', '').replace(' ', '').replace('-', '')
-        prefix = "meesho_account"
     elif item.get('mId'):
         identifier = str(item['mId']).replace('=', '').replace('/', '').replace('+', '')
-        prefix = "bigbasket_account"
+    elif item.get('accountId'):
+        identifier = str(item['accountId']).replace('=', '').replace('/', '').replace('+', '')
     else:
         identifier = f"idx{index}"
-        prefix = "account"
 
     filename = f"{prefix}_{identifier}.json"
     filepath = os.path.join(JSON_FILES_DIR, filename)
