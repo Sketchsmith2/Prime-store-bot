@@ -96,33 +96,8 @@
       {
         "name": "Meesho 175 OFF",
         "price": 16,
-        "stock": 4,
-        "data": [
-          {
-            "mobile": "+916378646104",
-            "user_id": "599084199",
-            "xo": "eyJ0eXBlIjoiY29tcG9zaXRlIn0=.eyJqd3QiOiJleUpoYkdjaU9pSklVekkxTmlJc0ltaDBkSEJ6T2k4dmJXVmxjMmh2TG1OdmJTOXBjMjlmWTI5MWJuUnllVjlqYjJSbElqb2lTVTRpTENKb2RIUndjem92TDIxbFpYTm9ieTVqYjIwdmRtVnljMmx2YmlJNklqRWlMQ0owZVhBaU9pSktWMVFpZlEuZXlKbGVIQWlPakUzT1RBMk1UQXpOalVzSW1oMGRIQnpPaTh2YldWbGMyaHZMbU52YlM5cGJuTjBZVzVqWlY5cFpDSTZJamN4TmpFMk9ERmlaR1JpTXpSak16WmlOekk1T1RWa09UQmtaamMwT0dWbUlpd2lhSFIwY0hNNkx5OXRaV1Z6YUc4dVkyOXRMM1Z6WlhKZmFXUWlPaUkxT1Rrd09EUXhPVGtpTENKcFlYUWlPakUzT1RBME16YzFOalY5LjZzdDBCbEltcGZPT1ZuSm9KeVM3U3JCc21NY2ZhLU5EY1RycFdtd3hQUlkiLCJ4byI6ImU0NTdkMjQxY2I4ODQxNDBhOWUxNTU1MjkxYWUzZTYzIn0=",
-            "ox": "_1iXN9yy1XQVwts07nLiSHjN8IIBMjFjdwv5AVi0xEWfDcH2PEmtZd7TVAYnwxo7N6Mb95Tkc7YcBuCOFZ8s1ysvhpRXwe8KpdpLvJO6nFXC2LjPW4KcQY0tWKOGQHxAA1aSbw"
-          },
-          {
-            "mobile": "+919311842616",
-            "user_id": "599067705",
-            "xo": "eyJ0eXBlIjoiY29tcG9zaXRlIn0=.eyJqd3QiOiJleUpoYkdjaU9pSklVekkxTmlJc0ltaDBkSEJ6T2k4dmJXVmxjMmh2TG1OdmJTOXBjMjlmWTI5MWJuUnllVjlqYjJSbElqb2lTVTRpTENKb2RIUndjem92TDIxbFpYTm9ieTVqYjIwdmRtVnljMmx2YmlJNklqRWlMQ0owZVhBaU9pSktWMVFpZlEuZXlKbGVIQWlPakUzT1RBMk1UQXpOallzSW1oMGRIQnpPaTh2YldWbGMyaHZMbU52YlM5cGJuTjBZVzVqWlY5cFpDSTZJbUpqWXpGbU5URXdOV000WlRRd01qazRNR1JqTURGbFkyWTJZek5pTm1ZM0lpd2lhSFIwY0hNNkx5OXRaV1Z6YUc4dVkyOXRMM1Z6WlhKZmFXUWlPaUkxT1Rrd05qYzNNRFVpTENKcFlYUWlPakUzT1RBME16YzFOalo5LjFCSzRXLUZqYmotVFVXUHByTEJhc3l4NXVRMzNxZkZTTkVEektnTWc0eXciLCJ4byI6ImJhNzdlZTkwNzBlZDQxMTk4MDExZjgzOTE0Y2U4ZjM5In0=",
-            "ox": "zBz14tVGqrBqknWnkkPcH39aNl7PhbT_Xwd_I3nqfrObNr6kREi2tL7OUw9114YfQ5PX9z2-Ig-Qsc44Xp3S8vKixm5CPrHAbZuptZdb55zMesX0O3tygj_9H4dfdb3cdu0pGw"
-          },
-          {
-            "mobile": "+917302648373",
-            "user_id": "599064543",
-            "xo": "eyJ0eXBlIjoiY29tcG9zaXRlIn0=.eyJqd3QiOiJleUpoYkdjaU9pSklVekkxTmlJc0ltaDBkSEJ6T2k4dmJXVmxjMmh2TG1OdmJTOXBjMjlmWTI5MWJuUnllVjlqYjJSbElqb2lTVTRpTENKb2RIUndjem92TDIxbFpYTm9ieTVqYjIwdmRtVnljMmx2YmlJNklqRWlMQ0owZVhBaU9pSktWMVFpZlEuZXlKbGVIQWlPakUzT1RBMk1UQXpOamNzSW1oMGRIQnpPaTh2YldWbGMyaHZMbU52YlM5cGJuTjBZVzVqWlY5cFpDSTZJbUprWXpneE9HSTNZV0l4WlRRellXVmhZek5sWXpSbU4yTmhZekF6TnpSbElpd2lhSFIwY0hNNkx5OXRaV1Z6YUc4dVkyOXRMM1Z6WlhKZmFXUWlPaUkxT1Rrd05qUTFORE1pTENKcFlYUWlPakUzT1RBME16YzFOamQ5LmxpbU5PdnB0NFNyT3N1allJM21VNlBabG9TSkNGQ1J1VENUNDdSM0M1WU0iLCJ4byI6Ijg1ZDhlMzczMjMzZDRkMzQ5MGE1NGQzOTYzYjBjMDRkIn0=",
-            "ox": "1p2b2k-WVK28MQdIspV4fh63XEb52k3n-_Ttce4Tjym5wchXBFf9hch-KLXLS5XjlAtq9HVlOcKCYB9OKarzhPMgm3iZpeDJUtBZO07BnJsYt0W2anS0QaGQSRHWos93jZS4bQ"
-          },
-          {
-            "mobile": "+919891768562",
-            "user_id": "599063193",
-            "xo": "eyJ0eXBlIjoiY29tcG9zaXRlIn0=.eyJqd3QiOiJleUpoYkdjaU9pSklVekkxTmlJc0ltaDBkSEJ6T2k4dmJXVmxjMmh2TG1OdmJTOXBjMjlmWTI5MWJuUnllVjlqYjJSbElqb2lTVTRpTENKb2RIUndjem92TDIxbFpYTm9ieTVqYjIwdmRtVnljMmx2YmlJNklqRWlMQ0owZVhBaU9pSktWMVFpZlEuZXlKbGVIQWlPakUzT1RBMk1UQXpOamNzSW1oMGRIQnpPaTh2YldWbGMyaHZMbU52YlM5cGJuTjBZVzVqWlY5cFpDSTZJbUppWVROaFlqWXdZVGRtTnpRME56bGlZV0UwWkdRd1lXVXhaRGhrWm1ReUlpd2lhSFIwY0hNNkx5OXRaV1Z6YUc4dVkyOXRMM1Z6WlhKZmFXUWlPaUkxT1Rrd05qTXhPVE1pTENKcFlYUWlPakUzT1RBME16YzFOamQ5LkdRc0llTVk1MmxPRkRxVDBmU0tvdHZGZk96Qmd4cEFNZzZOdjFzcEl4UDgiLCJ4byI6Ijk1ODQ5OTExZTk3OTQ4ZTZiN2NmODAwMTY0YmMzYzU4In0=",
-            "ox": "Bkf5IK3u5MDdzbZLyzIBEzcVdFwIYQ1FkMOusnaGTSUDld87LlmaLiiEDF1P850eI3d_oWnVaW1vfK2CFm7A_7VRLoDzk1H39WWOHn-SaRYrzyVhw5UCIloYGQBf36TogcXrGQ"
-          }
-        ]
+        "stock": 0,
+        "data": []
       }
     ]
   },
