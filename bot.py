@@ -276,10 +276,8 @@ def cat_coupons(call):
     for i, p in enumerate(products):
         stock = p.get('stock', 0)
         emoji = "🟢" if stock > 0 else "🔴"
-        sub = p.get('sub_category', '')
-        display = f"{p['name']} - {sub}" if sub else p['name']
-        markup.add(telebot.types.InlineKeyboardButton(
-            f"{emoji} {display} - ₹{p['price']} ({stock})",
+         markup.add(telebot.types.InlineKeyboardButton(
+            f"{emoji} {p['name']} - ₹{p['price']} ({stock})",
             callback_data=f"buy_coupon_{i}"
         ))
     markup.add(
@@ -348,6 +346,13 @@ def buy_product(call):
         "product": product,
         "stock": stock
     }
+
+    if category_key == 'coupons' and product.get('sub_category'):
+        bot.send_message(
+            call.message.chat.id,
+            f"📌 *Description:*\n{product['sub_category']}",
+            parse_mode='Markdown'
+        )
 
     markup = telebot.types.InlineKeyboardMarkup(row_width=5)
     max_qty = min(50, stock)
