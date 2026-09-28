@@ -7,6 +7,92 @@
         "price": 5,
         "stock": 0,
         "data": []
+      },
+      {
+        "name": "Amazon 10rs Giftcard",
+        "sub_category": "1 Giftcard redeemable only per amazon account",
+        "price": 5,
+        "stock": 26,
+        "data": [
+          {
+            "code": "GEKEDG2T8K67G8"
+          },
+          {
+            "code": "ZBKMNQEHFT7V3H"
+          },
+          {
+            "code": "GDVQU7ZA9V4GTP"
+          },
+          {
+            "code": "UAWAA8PW7D9F97"
+          },
+          {
+            "code": "FYHZVYZK3TFZ7V"
+          },
+          {
+            "code": "MMRPSWGXGZFFPB"
+          },
+          {
+            "code": "PJSDMPUX25ZG7V"
+          },
+          {
+            "code": "H7EW6WEZ7GG4JH"
+          },
+          {
+            "code": "RTUADB8GTKH82T"
+          },
+          {
+            "code": "QQY4ZTMKJ3HNTM"
+          },
+          {
+            "code": "PGUC4FH9TVWHBF"
+          },
+          {
+            "code": "P9SGXX6JFRYUU8"
+          },
+          {
+            "code": "C393VPME6XZFYA"
+          },
+          {
+            "code": "DHVJ8F5JK3X6E9"
+          },
+          {
+            "code": "R6NYSB5CX6YVYB"
+          },
+          {
+            "code": "RMM2FRYA6TKSG7"
+          },
+          {
+            "code": "9HET996NZPMATZ"
+          },
+          {
+            "code": "MKQ5KWB3HWTD4C"
+          },
+          {
+            "code": "QBM8UECF3CXMRX"
+          },
+          {
+            "code": "CSFX265KHF3JX2"
+          },
+          {
+            "code": "G8V47Q9363C3A9"
+          },
+          {
+            "code": "4STJ69NWYHC2BB"
+          },
+          {
+            "code": "G8KTK3UQ9AC77D"
+          },
+          {
+            "code": "SNNNFK3GD7X8YF"
+          },
+          {
+            "code": "DKW3KBJ9GER2AK"
+          },
+          {
+            "code": "NREBNUM3TQ564R"
+          }
+        ]
       }
     ],
     "json_files": [
