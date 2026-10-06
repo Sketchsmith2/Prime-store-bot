@@ -116,7 +116,7 @@ def generate_order_id():
 def create_single_order_file(order, index=1):
     """
     Ek order ke liye:
-    - JSON files: store_data.json se ek account uthao, file banao
+    - JSON files: store_data.json se ek account uthao, PURA JSON file banao
     - Coupons: sirf code uthao, file nahi banegi
     Returns: (filename, filepath, item_id)
     """
@@ -155,7 +155,7 @@ def create_single_order_file(order, index=1):
         print(f"✅ Delivered coupon: {code} | Remaining: {product['stock']}")
         return None, None, code
 
-    # ===== JSON ACCOUNT: file banao =====
+    # ===== JSON ACCOUNT: file banao (PURA JSON as it is) =====
     # Product name ke hisaab se prefix decide karo
     product_lower = product_name.lower()
     if 'flipkart' in product_lower:
@@ -164,6 +164,8 @@ def create_single_order_file(order, index=1):
         prefix = 'bigbasket'
     elif 'meesho 120' in product_lower:
         prefix = 'meesho_120'
+    elif 'meesho 170' in product_lower:
+        prefix = 'meesho_170'
     elif 'meesho 175' in product_lower:
         prefix = 'meesho_175'
     elif 'meesho 195' in product_lower:
@@ -173,7 +175,7 @@ def create_single_order_file(order, index=1):
     else:
         prefix = 'account'
 
-    # Identifier nikalo (mobile / phone / mId / accountId)
+    # Identifier nikalo
     if item.get('mobile'):
         identifier = str(item['mobile']).replace('+', '').replace(' ', '').replace('-', '')
     elif item.get('phone'):
@@ -188,6 +190,7 @@ def create_single_order_file(order, index=1):
     filename = f"{prefix}_{identifier}.json"
     filepath = os.path.join(JSON_FILES_DIR, filename)
 
+    # ✅ PURA JSON as it is save karo
     with open(filepath, 'w') as f:
         json.dump(item, f, indent=2)
 
@@ -612,7 +615,6 @@ def admin_approve(call):
     qty = order_found['quantity']
     category_key = order_found.get('category_key', 'json_files')
 
-    # Create items
     files_created = []
     items_delivered = []
     for i in range(1, qty + 1):
@@ -624,11 +626,10 @@ def admin_approve(call):
             files_created.append((filename, filepath))
         items_delivered.append(item_id)
 
-    # ===== COUPON: sirf codes bhejo (koi file nahi) =====
+    # ===== COUPON =====
     if category_key == 'coupons':
         code_list = "\n".join([f"🔑 `{c}`" for c in items_delivered])
 
-        # Customer ko
         bot.send_message(
             order_found['user_id'],
             f"🎉 *Payment Successful!*\n\n"
@@ -637,7 +638,6 @@ def admin_approve(call):
             parse_mode='Markdown'
         )
 
-        # ✅ ADMIN KO CODES BHEJO
         try:
             admin_msg = (
                 f"✅ *COUPON DELIVERED*\n"
@@ -650,11 +650,10 @@ def admin_approve(call):
                 f"🕐 Time: {get_indian_time()}"
             )
             bot.send_message(ADMIN_ID, admin_msg, parse_mode='Markdown')
-            print(f"✅ Admin notified for coupon: {items_delivered}")
         except Exception as e:
             print(f"❌ Admin notify FAILED: {e}")
 
-    # ===== JSON FILES: file + caption =====
+    # ===== JSON FILES =====
     else:
         item_list = "\n".join([f"   • `{m}`" for m in items_delivered])
 
@@ -690,7 +689,6 @@ def admin_approve(call):
             except Exception as e:
                 print(f"File send error: {e}")
 
-        # ✅ Admin ko bhi bhejo
         try:
             admin_msg = (
                 f"✅ *ORDER DELIVERED*\n"
@@ -703,11 +701,9 @@ def admin_approve(call):
                 f"🕐 Time: {get_indian_time()}"
             )
             bot.send_message(ADMIN_ID, admin_msg, parse_mode='Markdown')
-            print(f"✅ Admin notified: {items_delivered}")
         except Exception as e:
             print(f"❌ Admin notify FAILED: {e}")
 
-        # Admin ko files bhi
         for filename, filepath in files_created:
             if os.path.exists(filepath):
                 try:
@@ -720,12 +716,10 @@ def admin_approve(call):
                 except:
                     pass
 
-    # Update order status
     order_found['status'] = "delivered"
     order_found['delivered_at'] = get_indian_time()
     save_orders(orders)
 
-    # Delete temporary files
     for filename, filepath in files_created:
         try:
             if os.path.exists(filepath):
@@ -733,7 +727,6 @@ def admin_approve(call):
         except:
             pass
 
-    # Remove inline buttons
     try:
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
     except:
