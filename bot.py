@@ -114,19 +114,12 @@ def generate_order_id():
 # ============================================================
 
 def create_single_order_file(order, index=1):
-    """
-    Ek order ke liye:
-    - JSON files: store_data.json se ek account uthao, PURA JSON file banao
-    - Coupons: sirf code uthao, file nahi banegi
-    Returns: (filename, filepath, item_id)
-    """
     order_id = order['order_id']
     product_name = order['product']
     category_key = order.get('category_key', 'json_files')
 
     data = load_data()
 
-    # Product dhundo
     product = None
     for p in data['products'][category_key]:
         if p['name'] == product_name:
@@ -141,22 +134,18 @@ def create_single_order_file(order, index=1):
         print(f"❌ No stock data left for: {product_name}")
         return None, None, None
 
-    # Pehla item uthao
     item = product['data'][0]
 
-    # ===== COUPON: sirf code return karo, file nahi banao =====
+    # ===== COUPON =====
     if category_key == 'coupons':
         code = item.get('code', 'UNKNOWN')
-
         product['data'].pop(0)
         product['stock'] = len(product['data'])
         save_data(data)
-
         print(f"✅ Delivered coupon: {code} | Remaining: {product['stock']}")
         return None, None, code
 
-    # ===== JSON ACCOUNT: file banao (PURA JSON as it is) =====
-    # Product name ke hisaab se prefix decide karo
+    # ===== JSON ACCOUNT =====
     product_lower = product_name.lower()
     if 'flipkart' in product_lower:
         prefix = 'flipkart'
@@ -175,7 +164,6 @@ def create_single_order_file(order, index=1):
     else:
         prefix = 'account'
 
-    # Identifier nikalo
     if item.get('mobile'):
         identifier = str(item['mobile']).replace('+', '').replace(' ', '').replace('-', '')
     elif item.get('phone'):
@@ -190,7 +178,6 @@ def create_single_order_file(order, index=1):
     filename = f"{prefix}_{identifier}.json"
     filepath = os.path.join(JSON_FILES_DIR, filename)
 
-    # ✅ PURA JSON as it is save karo
     with open(filepath, 'w') as f:
         json.dump(item, f, indent=2)
 
@@ -342,7 +329,7 @@ def buy_product(call):
         bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
         return
 
-    # ✅ Description dikhao (agar coupon hai aur sub_category hai)
+    # Description (coupon only)
     if category_key == 'coupons' and product.get('sub_category'):
         bot.send_message(
             call.message.chat.id,
@@ -405,36 +392,20 @@ def quantity_selected(call):
     order_id = generate_order_id()
     total_price = product['price'] * qty
 
-    orders = load_orders()
-    orders['orders'].append({
-        "order_id": order_id,
-        "user_id": call.from_user.id,
-        "username": call.from_user.username or call.from_user.first_name,
-        "product": product['name'],
-        "category_key": selection['category_key'],
-        "product_index": selection['index'],
-        "price": product['price'],
-        "quantity": qty,
-        "total": total_price,
-        "status": "pending",
-        "payment": "unpaid",
-        "reference": None,
-        "created_at": get_indian_time()
-    })
-    save_orders(orders)
-
-    del user_selection[call.from_user.id]
-
+    # Delete old quantity message
     try:
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except:
         pass
 
+    # ✅ QR code bhejo aur message_id save karo
+    qr_message_id = None
     try:
         qr_bytes = generate_upi_qr(OWNER_UPI, total_price)
         if qr_bytes:
-            bot.send_photo(call.message.chat.id, qr_bytes,
+            qr_msg = bot.send_photo(call.message.chat.id, qr_bytes,
                 caption=f"📱 Scan to Pay ₹{total_price}\nUPI: {OWNER_UPI}")
+            qr_message_id = qr_msg.message_id
     except Exception as e:
         print(f"QR Error: {e}")
 
@@ -457,7 +428,31 @@ def quantity_selected(call):
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
     )
 
-    bot.send_message(call.message.chat.id, payment_msg, reply_markup=markup)
+    pay_msg = bot.send_message(call.message.chat.id, payment_msg, reply_markup=markup)
+    payment_message_id = pay_msg.message_id
+
+    # ✅ Order save karo — QR aur payment message id ke saath
+    orders = load_orders()
+    orders['orders'].append({
+        "order_id": order_id,
+        "user_id": call.from_user.id,
+        "username": call.from_user.username or call.from_user.first_name,
+        "product": product['name'],
+        "category_key": selection['category_key'],
+        "product_index": selection['index'],
+        "price": product['price'],
+        "quantity": qty,
+        "total": total_price,
+        "status": "pending",
+        "payment": "unpaid",
+        "reference": None,
+        "qr_message_id": qr_message_id,
+        "payment_message_id": payment_message_id,
+        "created_at": get_indian_time()
+    })
+    save_orders(orders)
+
+    del user_selection[call.from_user.id]
 
 # ============================================================
 # ===== CANCEL =====
@@ -474,6 +469,23 @@ def cancel_order(call):
                 bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
                 return
             order['status'] = "cancelled"
+
+            # Delete QR message
+            qr_mid = order.get('qr_message_id')
+            if qr_mid:
+                try:
+                    bot.delete_message(call.message.chat.id, qr_mid)
+                except:
+                    pass
+
+            # Delete payment message
+            pay_mid = order.get('payment_message_id')
+            if pay_mid:
+                try:
+                    bot.delete_message(call.message.chat.id, pay_mid)
+                except:
+                    pass
+
             break
     save_orders(orders)
 
@@ -508,11 +520,32 @@ def payment_done(call):
         bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
         return
 
+    # ✅ QR photo delete karo
+    qr_mid = order_found.get('qr_message_id')
+    if qr_mid:
+        try:
+            bot.delete_message(call.message.chat.id, qr_mid)
+            print(f"✅ QR message deleted: {qr_mid}")
+        except Exception as e:
+            print(f"QR delete error: {e}")
+
+    # ✅ Payment message delete karo
+    pay_mid = order_found.get('payment_message_id')
+    if pay_mid:
+        try:
+            bot.delete_message(call.message.chat.id, pay_mid)
+            print(f"✅ Payment message deleted: {pay_mid}")
+        except Exception as e:
+            print(f"Payment delete error: {e}")
+
     bot.answer_callback_query(call.id, "📝 Send reference now!")
 
     msg = bot.send_message(call.message.chat.id,
-        f"📝 Send payment reference/UTR for Order {order_id}\n\n"
-        f"Example: 123456789012")
+        f"📝 *Send payment reference/UTR*\n\n"
+        f"🆔 Order: `{order_id}`\n\n"
+        f"Example: `123456789012`\n\n"
+        f"⚠️ Type your reference and send.",
+        parse_mode='Markdown')
     bot.register_next_step_handler(msg, process_reference, order_id)
 
 # ============================================================
