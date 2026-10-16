@@ -147,8 +147,10 @@ def create_single_order_file(order, index=1):
 
     # ===== JSON ACCOUNT =====
     product_lower = product_name.lower()
-    if 'flipkart' in product_lower:
+        if 'flipkart' in product_lower:
         prefix = 'flipkart'
+    elif 'bb 100' in product_lower or 'bb100' in product_lower:
+        prefix = 'bb_100_free_cash'
     elif 'bigbasket' in product_lower:
         prefix = 'bigbasket'
     elif 'meesho 120' in product_lower:
