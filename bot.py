@@ -136,7 +136,6 @@ def create_single_order_file(order, index=1):
 
     item = product['data'][0]
 
-    # ===== COUPON =====
     if category_key == 'coupons':
         code = item.get('code', 'UNKNOWN')
         product['data'].pop(0)
@@ -145,7 +144,6 @@ def create_single_order_file(order, index=1):
         print(f"✅ Delivered coupon: {code} | Remaining: {product['stock']}")
         return None, None, code
 
-    # ===== JSON ACCOUNT =====
     product_lower = product_name.lower()
     if 'flipkart' in product_lower:
         prefix = 'flipkart'
@@ -239,7 +237,6 @@ def support(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "shop")
 def shop(call):
-    # ✅ Description delete karo agar bachi hui hai
     if call.from_user.id in desc_messages:
         try:
             bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
@@ -265,7 +262,6 @@ def shop(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "cat_coupons")
 def cat_coupons(call):
-    # ✅ Description delete karo agar bachi hui hai
     if call.from_user.id in desc_messages:
         try:
             bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
@@ -298,7 +294,6 @@ def cat_coupons(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "cat_json")
 def cat_json(call):
-    # ✅ Description delete karo agar bachi hui hai
     if call.from_user.id in desc_messages:
         try:
             bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
@@ -331,7 +326,7 @@ def cat_json(call):
 # ============================================================
 
 user_selection = {}
-desc_messages = {}  # ✅ Naya dictionary description message ID ke liye
+desc_messages = {} 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('buy_'))
 def buy_product(call):
@@ -354,7 +349,6 @@ def buy_product(call):
         bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
         return
 
-    # ✅ Description message delete karo agar purani bachi hui hai
     if call.from_user.id in desc_messages:
         try:
             bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
@@ -362,7 +356,6 @@ def buy_product(call):
             pass
         del desc_messages[call.from_user.id]
 
-    # ✅ Naya description bhejo (agar coupon hai aur sub_category hai)
     if category_key == 'coupons' and product.get('sub_category'):
         desc_msg = bot.send_message(
             call.message.chat.id,
@@ -380,14 +373,18 @@ def buy_product(call):
     }
 
     markup = telebot.types.InlineKeyboardMarkup(row_width=5)
-    max_qty = min(50, stock)
-    for start in range(1, 51, 10):
-        row = []
-        for q in range(start, start + 10):
-            if q <= max_qty:
-                row.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
-        if row:
-            markup.row(*row)
+    max_qty = min(10, stock) 
+    
+    row = []
+    for q in range(1, max_qty + 1):
+        row.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+    if row:
+        markup.row(*row)
+
+    markup.add(
+        telebot.types.InlineKeyboardButton("✍️ Custom Quantity (10+)", callback_data="custom_qty")
+    )
+    
     markup.add(
         telebot.types.InlineKeyboardButton("🔙 Back", callback_data="shop"),
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
@@ -402,6 +399,115 @@ def buy_product(call):
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
         reply_markup=markup)
+
+# ============================================================
+# ===== CUSTOM QUANTITY =====
+# ============================================================
+
+@bot.callback_query_handler(func=lambda call: call.data == "custom_qty")
+def custom_quantity_prompt(call):
+    if call.from_user.id not in user_selection:
+        bot.answer_callback_query(call.id, "❌ Session expired!", show_alert=True)
+        return
+    
+    selection = user_selection[call.from_user.id]
+    stock = selection['stock']
+    
+    msg = bot.send_message(
+        call.message.chat.id,
+        f"✍️ *Enter Custom Quantity*\n\n"
+        f"📦 Available: {stock}\n\n"
+        f"Please type a number (1-{stock}):",
+        parse_mode='Markdown'
+    )
+    bot.register_next_step_handler(msg, process_custom_quantity)
+
+
+def process_custom_quantity(message):
+    try:
+        if message.from_user.id not in user_selection:
+            bot.send_message(message.chat.id, "❌ Session expired! Please click /start again.")
+            return
+        
+        selection = user_selection[message.from_user.id]
+        product = selection['product']
+        stock = selection['stock']
+        
+        try:
+            qty = int(message.text.strip())
+        except ValueError:
+            msg = bot.send_message(message.chat.id, "❌ Invalid! Please send a number:")
+            bot.register_next_step_handler(msg, process_custom_quantity)
+            return
+        
+        if qty < 1 or qty > stock:
+            msg = bot.send_message(message.chat.id, f"❌ Please enter a number between 1 and {stock}:")
+            bot.register_next_step_handler(msg, process_custom_quantity)
+            return
+        
+        order_id = generate_order_id()
+        total_price = product['price'] * qty
+
+        orders = load_orders()
+        orders['orders'].append({
+            "order_id": order_id,
+            "user_id": message.from_user.id,
+            "username": message.from_user.username or message.from_user.first_name,
+            "product": product['name'],
+            "category_key": selection['category_key'],
+            "product_index": selection['index'],
+            "price": product['price'],
+            "quantity": qty,
+            "total": total_price,
+            "status": "pending",
+            "payment": "unpaid",
+            "reference": None,
+            "created_at": get_indian_time()
+        })
+        save_orders(orders)
+
+        del user_selection[message.from_user.id]
+
+        if message.from_user.id in desc_messages:
+            try:
+                bot.delete_message(message.chat.id, desc_messages[message.from_user.id])
+            except:
+                pass
+            del desc_messages[message.from_user.id]
+
+        try:
+            qr_bytes = generate_upi_qr(OWNER_UPI, total_price)
+            if qr_bytes:
+                bot.send_photo(message.chat.id, qr_bytes,
+                    caption=f"📱 Scan to Pay ₹{total_price}\nUPI: {OWNER_UPI}")
+        except Exception as e:
+            print(f"QR Error: {e}")
+
+        payment_msg = (
+            f"💳 PAYMENT REQUIRED\n━━━━━━━━━━━━━━\n\n"
+            f"🆔 Order: {order_id}\n"
+            f"📦 Product: {product['name']}\n"
+            f"📦 Quantity: {qty}\n"
+            f"💰 Price: ₹{product['price']} each\n"
+            f"💵 Total: ₹{total_price}\n\n"
+            f"📤 UPI: {OWNER_UPI}\n"
+            f"📱 Phone: {OWNER_PHONE}\n\n"
+            f"✅ Click 'I Have Paid' after payment"
+        )
+
+        markup = telebot.types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            telebot.types.InlineKeyboardButton("✅ I Have Paid", callback_data=f"paid_{order_id}"),
+            telebot.types.InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{order_id}"),
+            telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
+        )
+
+        bot.send_message(message.chat.id, payment_msg, reply_markup=markup)
+
+    except Exception as e:
+        print(f"❌ Error in process_custom_quantity: {e}")
+        traceback.print_exc()
+
 
 # ============================================================
 # ===== QUANTITY SELECTED =====
@@ -446,7 +552,6 @@ def quantity_selected(call):
 
     del user_selection[call.from_user.id]
 
-    # ✅ Description delete karo ab
     if call.from_user.id in desc_messages:
         try:
             bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
@@ -654,7 +759,6 @@ def admin_approve(call):
             files_created.append((filename, filepath))
         items_delivered.append(item_id)
 
-    # ===== COUPON =====
     if category_key == 'coupons':
         code_list = "\n".join([f"🔑 `{c}`" for c in items_delivered])
 
@@ -681,7 +785,6 @@ def admin_approve(call):
         except Exception as e:
             print(f"❌ Admin notify FAILED: {e}")
 
-    # ===== JSON FILES =====
     else:
         item_list = "\n".join([f"   • `{m}`" for m in items_delivered])
 
@@ -798,7 +901,6 @@ def admin_reject(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "my_orders")
 def my_orders(call):
-    # ✅ Description delete karo agar bachi hui hai
     if call.from_user.id in desc_messages:
         try:
             bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
@@ -832,7 +934,6 @@ def my_orders(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "help")
 def help_menu(call):
-    # ✅ Description delete karo agar bachi hui hai
     if call.from_user.id in desc_messages:
         try:
             bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
@@ -867,7 +968,6 @@ def help_menu(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "back_main")
 def back_main(call):
-    # ✅ Description delete karo agar bachi hui hai
     if call.from_user.id in desc_messages:
         try:
             bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
