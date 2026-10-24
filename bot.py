@@ -149,8 +149,6 @@ def create_single_order_file(order, index=1):
     product_lower = product_name.lower()
     if 'flipkart' in product_lower:
         prefix = 'flipkart'
-    elif 'bb 100' in product_lower or 'bb100' in product_lower:
-        prefix = 'bb_100_free_cash'
     elif 'bigbasket' in product_lower:
         prefix = 'bigbasket'
     elif 'meesho 120' in product_lower:
@@ -159,8 +157,6 @@ def create_single_order_file(order, index=1):
         prefix = 'meesho_170'
     elif 'meesho 175' in product_lower:
         prefix = 'meesho_175'
-    elif 'meesho 190' in product_lower:
-        prefix = 'meesho_190'
     elif 'meesho 195' in product_lower:
         prefix = 'meesho_195'
     elif 'meesho' in product_lower:
@@ -243,6 +239,14 @@ def support(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "shop")
 def shop(call):
+    # ✅ Description delete karo agar bachi hui hai
+    if call.from_user.id in desc_messages:
+        try:
+            bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
+        except:
+            pass
+        del desc_messages[call.from_user.id]
+
     data = load_data()
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
     json_stock = sum(p.get('stock', 0) for p in data['products']['json_files'])
@@ -261,6 +265,14 @@ def shop(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "cat_coupons")
 def cat_coupons(call):
+    # ✅ Description delete karo agar bachi hui hai
+    if call.from_user.id in desc_messages:
+        try:
+            bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
+        except:
+            pass
+        del desc_messages[call.from_user.id]
+
     data = load_data()
     products = data['products']['coupons']
     if not products:
@@ -286,6 +298,14 @@ def cat_coupons(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "cat_json")
 def cat_json(call):
+    # ✅ Description delete karo agar bachi hui hai
+    if call.from_user.id in desc_messages:
+        try:
+            bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
+        except:
+            pass
+        del desc_messages[call.from_user.id]
+
     data = load_data()
     products = data['products']['json_files']
     if not products:
@@ -311,6 +331,7 @@ def cat_json(call):
 # ============================================================
 
 user_selection = {}
+desc_messages = {}  # ✅ Naya dictionary description message ID ke liye
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('buy_'))
 def buy_product(call):
@@ -333,13 +354,22 @@ def buy_product(call):
         bot.answer_callback_query(call.id, "❌ Out of stock!", show_alert=True)
         return
 
-    # Description (coupon only)
+    # ✅ Description message delete karo agar purani bachi hui hai
+    if call.from_user.id in desc_messages:
+        try:
+            bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
+        except:
+            pass
+        del desc_messages[call.from_user.id]
+
+    # ✅ Naya description bhejo (agar coupon hai aur sub_category hai)
     if category_key == 'coupons' and product.get('sub_category'):
-        bot.send_message(
+        desc_msg = bot.send_message(
             call.message.chat.id,
             f"📌 *Description:*\n{product['sub_category']}",
             parse_mode='Markdown'
         )
+        desc_messages[call.from_user.id] = desc_msg.message_id
 
     user_selection[call.from_user.id] = {
         "category": category,
@@ -349,24 +379,15 @@ def buy_product(call):
         "stock": stock
     }
 
-    # ✅ Sirf 1-5 buttons + Custom Quantity
     markup = telebot.types.InlineKeyboardMarkup(row_width=5)
-    max_qty = min(5, stock)
-
-    # Row 1: 1-5 buttons
-    row = []
-    for q in range(1, max_qty + 1):
-        row.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
-    if row:
-        markup.row(*row)
-
-    # Row 2: Custom Quantity
-    markup.add(telebot.types.InlineKeyboardButton(
-        "➕ Custom Quantity",
-        callback_data="custom_qty"
-    ))
-
-    # Row 3: Back + Home
+    max_qty = min(50, stock)
+    for start in range(1, 51, 10):
+        row = []
+        for q in range(start, start + 10):
+            if q <= max_qty:
+                row.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+        if row:
+            markup.row(*row)
     markup.add(
         telebot.types.InlineKeyboardButton("🔙 Back", callback_data="shop"),
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
@@ -377,120 +398,10 @@ def buy_product(call):
         f"📦 {product['name']}\n"
         f"💰 ₹{product['price']} each\n"
         f"📦 Available: {stock}\n\n"
-        f"Select 1-5 or tap Custom Quantity:",
+        f"Select quantity:",
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
         reply_markup=markup)
-
-# ============================================================
-# ===== CUSTOM QUANTITY =====
-# ============================================================
-
-@bot.callback_query_handler(func=lambda call: call.data == "custom_qty")
-def custom_qty(call):
-    if call.from_user.id not in user_selection:
-        bot.answer_callback_query(call.id, "❌ Session expired! Try again.", show_alert=True)
-        return
-
-    selection = user_selection[call.from_user.id]
-    product = selection['product']
-    stock = selection['stock']
-    category_key = selection['category_key']
-    product_index = selection['index']
-
-    bot.answer_callback_query(call.id)
-
-    msg = bot.send_message(
-        call.message.chat.id,
-        f"📝 *Custom Quantity*\n\n"
-        f"📦 {product['name']}\n"
-        f"💰 ₹{product['price']} each\n"
-        f"📦 Available: {stock}\n\n"
-        f"Type quantity (1-{stock}):",
-        parse_mode='Markdown'
-    )
-    bot.register_next_step_handler(msg, process_custom_qty, product, stock, category_key, product_index)
-
-
-def process_custom_qty(message, product, stock, category_key, product_index):
-    try:
-        qty = int(message.text.strip())
-
-        if qty < 1:
-            bot.send_message(message.chat.id, "❌ Invalid quantity!")
-            return
-
-        if qty > stock:
-            bot.send_message(message.chat.id, f"❌ Only {stock} available!")
-            return
-
-        # Create order
-        order_id = generate_order_id()
-        total_price = product['price'] * qty
-
-        # QR code
-        qr_message_id = None
-        try:
-            qr_bytes = generate_upi_qr(OWNER_UPI, total_price)
-            if qr_bytes:
-                qr_msg = bot.send_photo(message.chat.id, qr_bytes,
-                    caption=f"📱 Scan to Pay ₹{total_price}\nUPI: {OWNER_UPI}")
-                qr_message_id = qr_msg.message_id
-        except Exception as e:
-            print(f"QR Error: {e}")
-
-        payment_msg = (
-            f"💳 PAYMENT REQUIRED\n━━━━━━━━━━━━━━\n\n"
-            f"🆔 Order: {order_id}\n"
-            f"📦 Product: {product['name']}\n"
-            f"📦 Quantity: {qty}\n"
-            f"💰 Price: ₹{product['price']} each\n"
-            f"💵 Total: ₹{total_price}\n\n"
-            f"📤 UPI: {OWNER_UPI}\n"
-            f"📱 Phone: {OWNER_PHONE}\n\n"
-            f"✅ Click 'I Have Paid' after payment"
-        )
-
-        markup = telebot.types.InlineKeyboardMarkup(row_width=1)
-        markup.add(
-            telebot.types.InlineKeyboardButton("✅ I Have Paid", callback_data=f"paid_{order_id}"),
-            telebot.types.InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{order_id}"),
-            telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
-        )
-
-        pay_msg = bot.send_message(message.chat.id, payment_msg, reply_markup=markup)
-        payment_message_id = pay_msg.message_id
-
-        # Save order
-        orders = load_orders()
-        orders['orders'].append({
-            "order_id": order_id,
-            "user_id": message.from_user.id,
-            "username": message.from_user.username or message.from_user.first_name,
-            "product": product['name'],
-            "category_key": category_key,
-            "product_index": product_index,
-            "price": product['price'],
-            "quantity": qty,
-            "total": total_price,
-            "status": "pending",
-            "payment": "unpaid",
-            "reference": None,
-            "qr_message_id": qr_message_id,
-            "payment_message_id": payment_message_id,
-            "created_at": get_indian_time()
-        })
-        save_orders(orders)
-
-        # Remove from user_selection
-        if message.from_user.id in user_selection:
-            del user_selection[message.from_user.id]
-
-    except ValueError:
-        bot.send_message(message.chat.id, "❌ Invalid! Type a number.")
-    except Exception as e:
-        print(f"Error in custom qty: {e}")
-        bot.send_message(message.chat.id, "❌ Error!")
 
 # ============================================================
 # ===== QUANTITY SELECTED =====
@@ -515,20 +426,44 @@ def quantity_selected(call):
     order_id = generate_order_id()
     total_price = product['price'] * qty
 
-    # Delete old quantity message
+    orders = load_orders()
+    orders['orders'].append({
+        "order_id": order_id,
+        "user_id": call.from_user.id,
+        "username": call.from_user.username or call.from_user.first_name,
+        "product": product['name'],
+        "category_key": selection['category_key'],
+        "product_index": selection['index'],
+        "price": product['price'],
+        "quantity": qty,
+        "total": total_price,
+        "status": "pending",
+        "payment": "unpaid",
+        "reference": None,
+        "created_at": get_indian_time()
+    })
+    save_orders(orders)
+
+    del user_selection[call.from_user.id]
+
+    # ✅ Description delete karo ab
+    if call.from_user.id in desc_messages:
+        try:
+            bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
+        except:
+            pass
+        del desc_messages[call.from_user.id]
+
     try:
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except:
         pass
 
-    # QR code
-    qr_message_id = None
     try:
         qr_bytes = generate_upi_qr(OWNER_UPI, total_price)
         if qr_bytes:
-            qr_msg = bot.send_photo(call.message.chat.id, qr_bytes,
+            bot.send_photo(call.message.chat.id, qr_bytes,
                 caption=f"📱 Scan to Pay ₹{total_price}\nUPI: {OWNER_UPI}")
-            qr_message_id = qr_msg.message_id
     except Exception as e:
         print(f"QR Error: {e}")
 
@@ -551,31 +486,7 @@ def quantity_selected(call):
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
     )
 
-    pay_msg = bot.send_message(call.message.chat.id, payment_msg, reply_markup=markup)
-    payment_message_id = pay_msg.message_id
-
-    # Save order
-    orders = load_orders()
-    orders['orders'].append({
-        "order_id": order_id,
-        "user_id": call.from_user.id,
-        "username": call.from_user.username or call.from_user.first_name,
-        "product": product['name'],
-        "category_key": selection['category_key'],
-        "product_index": selection['index'],
-        "price": product['price'],
-        "quantity": qty,
-        "total": total_price,
-        "status": "pending",
-        "payment": "unpaid",
-        "reference": None,
-        "qr_message_id": qr_message_id,
-        "payment_message_id": payment_message_id,
-        "created_at": get_indian_time()
-    })
-    save_orders(orders)
-
-    del user_selection[call.from_user.id]
+    bot.send_message(call.message.chat.id, payment_msg, reply_markup=markup)
 
 # ============================================================
 # ===== CANCEL =====
@@ -592,21 +503,6 @@ def cancel_order(call):
                 bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
                 return
             order['status'] = "cancelled"
-
-            qr_mid = order.get('qr_message_id')
-            if qr_mid:
-                try:
-                    bot.delete_message(call.message.chat.id, qr_mid)
-                except:
-                    pass
-
-            pay_mid = order.get('payment_message_id')
-            if pay_mid:
-                try:
-                    bot.delete_message(call.message.chat.id, pay_mid)
-                except:
-                    pass
-
             break
     save_orders(orders)
 
@@ -641,30 +537,11 @@ def payment_done(call):
         bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
         return
 
-    # Delete QR photo
-    qr_mid = order_found.get('qr_message_id')
-    if qr_mid:
-        try:
-            bot.delete_message(call.message.chat.id, qr_mid)
-        except:
-            pass
-
-    # Delete payment message
-    pay_mid = order_found.get('payment_message_id')
-    if pay_mid:
-        try:
-            bot.delete_message(call.message.chat.id, pay_mid)
-        except:
-            pass
-
     bot.answer_callback_query(call.id, "📝 Send reference now!")
 
     msg = bot.send_message(call.message.chat.id,
-        f"📝 *Send payment reference/UTR*\n\n"
-        f"🆔 Order: `{order_id}`\n\n"
-        f"Example: `123456789012`\n\n"
-        f"⚠️ Type your reference and send.",
-        parse_mode='Markdown')
+        f"📝 Send payment reference/UTR for Order {order_id}\n\n"
+        f"Example: 123456789012")
     bot.register_next_step_handler(msg, process_reference, order_id)
 
 # ============================================================
@@ -709,7 +586,6 @@ def process_reference(message, order_id):
             f"⏳ Waiting for admin approval...\n"
             f"📞 Contact: @Prime_Blogs if delayed.")
 
-        # ===== ADMIN NOTIFICATION =====
         admin_msg = (
             f"🟢 PAYMENT RECEIVED\n"
             f"━━━━━━━━━━━━━━\n\n"
@@ -922,6 +798,14 @@ def admin_reject(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "my_orders")
 def my_orders(call):
+    # ✅ Description delete karo agar bachi hui hai
+    if call.from_user.id in desc_messages:
+        try:
+            bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
+        except:
+            pass
+        del desc_messages[call.from_user.id]
+
     orders = load_orders()
     user_orders = [o for o in orders['orders'] if o['user_id'] == call.from_user.id]
 
@@ -948,6 +832,14 @@ def my_orders(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "help")
 def help_menu(call):
+    # ✅ Description delete karo agar bachi hui hai
+    if call.from_user.id in desc_messages:
+        try:
+            bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
+        except:
+            pass
+        del desc_messages[call.from_user.id]
+
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(
         telebot.types.InlineKeyboardButton("🔙 Back", callback_data="shop"),
@@ -959,7 +851,7 @@ def help_menu(call):
         "1. Click Shop Now\n"
         "2. Select category\n"
         "3. Choose product\n"
-        "4. Select quantity (1-5 or custom)\n"
+        "4. Select quantity\n"
         "5. Pay via UPI\n"
         "6. Click 'I Have Paid'\n"
         "7. Send reference\n"
@@ -975,6 +867,14 @@ def help_menu(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "back_main")
 def back_main(call):
+    # ✅ Description delete karo agar bachi hui hai
+    if call.from_user.id in desc_messages:
+        try:
+            bot.delete_message(call.message.chat.id, desc_messages[call.from_user.id])
+        except:
+            pass
+        del desc_messages[call.from_user.id]
+
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         telebot.types.InlineKeyboardButton("🛒 Shop Now", callback_data="shop"),
