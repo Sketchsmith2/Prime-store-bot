@@ -14,6 +14,44 @@
         "price": 5,
         "stock": 0,
         "data": []
+      },
+      {
+        "name": "BB 100 pe 100 off",
+        "sub_category": "Flat \u20b9100/- Off only on Organic Fruits & Vegetables & Organic Staples",
+        "price": 10,
+        "stock": 10,
+        "data": [
+          {
+            "code": "CHORGAN10-072ZU5Z850FKTXH"
+          },
+          {
+            "code": "CHORGAN10-06WNCPYATM9YMMK"
+          },
+          {
+            "code": "CHORGAN10-0730G9A2QKKP1FM"
+          },
+          {
+            "code": "CHORGAN10-07318TDAGPDQCMD"
+          },
+          {
+            "code": "CHORGAN10-0731FVQ646KEHTD"
+          },
+          {
+            "code": "CHORGAN10-0731TCU7FMDX0XQ"
+          },
+          {
+            "code": "CHORGAN10-0731V634U217FVA"
+          },
+          {
+            "code": "CHORGAN10-07320JZWWRZ00X5"
+          },
+          {
+            "code": "CHORGAN10-0732G7TRX9R5M06"
+          },
+          {
+            "code": "CHORGAN10-0732PPE8M2G4VPH"
+          }
+        ]
       }
     ],
     "json_files": [
