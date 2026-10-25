@@ -101,7 +101,7 @@ def generate_order_id():
     return "ORD" + ''.join(random.choices(string.digits, k=8))
 
 # ============================================================
-# ===== CREATE ITEM =====
+# ===== CREATE ITEM (JSON or COUPON) =====
 # ============================================================
 def create_single_order_file(order, index=1):
     order_id = order['order_id']
@@ -129,7 +129,7 @@ def create_single_order_file(order, index=1):
         save_data(data)
         return None, None, code
 
-    # ===== JSON ACCOUNT =====
+    # ===== JSON ACCOUNT (FULL JSON) =====
     product_lower = product_name.lower()
     if 'flipkart' in product_lower: prefix = 'flipkart'
     elif 'bigbasket' in product_lower: prefix = 'bigbasket'
@@ -149,7 +149,6 @@ def create_single_order_file(order, index=1):
     filename = f"{prefix}_{identifier}.json"
     filepath = os.path.join(JSON_FILES_DIR, filename)
 
-    # Save FULL JSON
     with open(filepath, 'w') as f:
         json.dump(item, f, indent=2)
 
@@ -183,7 +182,7 @@ def start(message):
         reply_markup=markup)
 
 # ============================================================
-# ===== SUPPORT & MENUS =====
+# ===== SUPPORT & CATEGORIES =====
 # ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "support")
 def support(call):
@@ -268,7 +267,7 @@ def cat_json(call):
         reply_markup=markup)
 
 # ============================================================
-# ===== USER SELECTION =====
+# ===== USER SELECTION (NEW UI WITH CUSTOM) =====
 # ============================================================
 user_selection = {}
 
@@ -308,15 +307,19 @@ def buy_product(call):
         "stock": stock
     }
 
+    # ✅ NEW UI: 1-5 + Custom
     markup = telebot.types.InlineKeyboardMarkup(row_width=5)
-    max_qty = min(50, stock)
-    for start in range(1, 51, 10):
-        row = []
-        for q in range(start, start + 10):
-            if q <= max_qty:
-                row.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
-        if row:
-            markup.row(*row)
+    
+    row = []
+    max_qty = min(5, stock)
+    for q in range(1, max_qty + 1):
+        row.append(telebot.types.InlineKeyboardButton(f"{q}", callback_data=f"qty_{q}"))
+    if row:
+        markup.row(*row)
+    
+    if stock > 5:
+        markup.add(telebot.types.InlineKeyboardButton("✍️ Custom Quantity", callback_data=f"custom_qty_{index}"))
+        
     markup.add(
         telebot.types.InlineKeyboardButton("🔙 Back", callback_data="shop"),
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
@@ -327,11 +330,14 @@ def buy_product(call):
         f"📦 {product['name']}\n"
         f"💰 ₹{product['price']} each\n"
         f"📦 Available: {stock}\n\n"
-        f"Select quantity:",
+        f"Select quantity from below or click Custom:",
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
         reply_markup=markup)
 
+# ============================================================
+# ===== QUANTITY PROCESSING =====
+# ============================================================
 @bot.callback_query_handler(func=lambda call: call.data.startswith('qty_'))
 def quantity_selected(call):
     qty = int(call.data.split('_')[1])
@@ -340,22 +346,61 @@ def quantity_selected(call):
         bot.answer_callback_query(call.id, "❌ Session expired!", show_alert=True)
         return
 
+    process_order(call.message.chat.id, call.from_user.id, qty, call.message.message_id)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('custom_qty_'))
+def custom_quantity_prompt(call):
+    if call.from_user.id not in user_selection:
+        bot.answer_callback_query(call.id, "❌ Session expired! Try again.", show_alert=True)
+        return
+        
     selection = user_selection[call.from_user.id]
     product = selection['product']
     stock = selection['stock']
+    
+    msg = bot.send_message(
+        call.message.chat.id,
+        f"✍️ *Custom Quantity*\n\n"
+        f"📦 {product['name']}\n"
+        f"📦 Available: {stock}\n\n"
+        f"Reply with a number (1 to {stock}):",
+        parse_mode='Markdown'
+    )
+    bot.register_next_step_handler(msg, process_custom_quantity)
 
-    if qty > stock:
-        bot.answer_callback_query(call.id, f"❌ Only {stock} available!", show_alert=True)
+def process_custom_quantity(message):
+    try:
+        qty = int(message.text.strip())
+    except ValueError:
+        bot.reply_to(message, "❌ Invalid number. Please start again from shop.")
         return
 
+    if message.from_user.id not in user_selection:
+        bot.send_message(message.chat.id, "❌ Session expired. Please start again.")
+        return
+
+    selection = user_selection[message.from_user.id]
+    stock = selection['stock']
+
+    if qty < 1 or qty > stock:
+        bot.reply_to(message, f"❌ Invalid! Quantity must be between 1 and {stock}.")
+        return
+
+    process_order(message.chat.id, message.from_user.id, qty, None)
+
+def process_order(chat_id, user_id, qty, message_id_to_delete):
+    selection = user_selection[user_id]
+    product = selection['product']
+    stock = selection['stock']
+    
     order_id = generate_order_id()
     total_price = product['price'] * qty
 
     orders = load_orders()
     orders['orders'].append({
         "order_id": order_id,
-        "user_id": call.from_user.id,
-        "username": call.from_user.username or call.from_user.first_name,
+        "user_id": user_id,
+        "username": bot.get_chat(user_id).username or bot.get_chat(user_id).first_name,
         "product": product['name'],
         "category_key": selection['category_key'],
         "product_index": selection['index'],
@@ -369,17 +414,18 @@ def quantity_selected(call):
     })
     save_orders(orders)
 
-    del user_selection[call.from_user.id]
+    del user_selection[user_id]
 
-    try:
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-    except:
-        pass
+    if message_id_to_delete:
+        try:
+            bot.delete_message(chat_id, message_id_to_delete)
+        except:
+            pass
 
     try:
         qr_bytes = generate_upi_qr(OWNER_UPI, total_price)
         if qr_bytes:
-            bot.send_photo(call.message.chat.id, qr_bytes,
+            bot.send_photo(chat_id, qr_bytes,
                 caption=f"📱 Scan to Pay ₹{total_price}\nUPI: {OWNER_UPI}")
     except Exception as e:
         print(f"QR Error: {e}")
@@ -403,7 +449,7 @@ def quantity_selected(call):
         telebot.types.InlineKeyboardButton("🏠 Home", callback_data="back_main")
     )
 
-    bot.send_message(call.message.chat.id, payment_msg, reply_markup=markup)
+    bot.send_message(chat_id, payment_msg, reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('cancel_'))
 def cancel_order(call):
@@ -490,7 +536,6 @@ def process_reference(message, order_id):
             f"⏳ Waiting for admin approval...\n"
             f"📞 Contact: @Prime_Blogs if delayed.")
 
-        # ✅ ADMIN NOTIFICATION (NO MARKDOWN - FIX FOR MISSING MSG)
         admin_msg = (
             f"🟢 PAYMENT RECEIVED\n"
             f"━━━━━━━━━━━━━━\n\n"
@@ -518,7 +563,7 @@ def process_reference(message, order_id):
         print(f"❌ Error in process_reference: {e}")
 
 # ============================================================
-# ===== ADMIN APPROVE (NO MARKDOWN - FIX FOR MISSING MSG) =====
+# ===== ADMIN APPROVE & REJECT =====
 # ============================================================
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve_'))
 def admin_approve(call):
@@ -556,7 +601,6 @@ def admin_approve(call):
             files_created.append((filename, filepath))
         items_delivered.append(item_id)
 
-    # ===== COUPON =====
     if category_key == 'coupons':
         code_list = "\n".join([f"🔑 {c}" for c in items_delivered])
 
@@ -582,7 +626,6 @@ def admin_approve(call):
         except Exception as e:
             print(f"❌ Admin notify FAILED: {e}")
 
-    # ===== JSON FILES =====
     else:
         item_list = "\n".join([f"   • {m}" for m in items_delivered])
 
@@ -687,7 +730,7 @@ def admin_reject(call):
     bot.answer_callback_query(call.id, "❌ Rejected!")
 
 # ============================================================
-# ===== MY ORDERS / HELP / HOME =====
+# ===== MENUS (MY ORDERS, HELP, HOME) =====
 # ============================================================
 @bot.callback_query_handler(func=lambda call: call.data == "my_orders")
 def my_orders(call):
