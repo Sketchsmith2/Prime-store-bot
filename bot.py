@@ -109,7 +109,6 @@ def create_single_order_file(order, index=1):
     category_key = order.get('category_key', 'json_files')
 
     data = load_data()
-
     product = None
     for p in data['products'][category_key]:
         if p['name'] == product_name:
@@ -121,7 +120,6 @@ def create_single_order_file(order, index=1):
 
     item = product['data'][0]
 
-    # ===== COUPON =====
     if category_key == 'coupons':
         code = item.get('code', 'UNKNOWN')
         product['data'].pop(0)
@@ -129,7 +127,7 @@ def create_single_order_file(order, index=1):
         save_data(data)
         return None, None, code
 
-    # ===== JSON ACCOUNT (FULL JSON) =====
+    # JSON ACCOUNT
     product_lower = product_name.lower()
     if 'flipkart' in product_lower: prefix = 'flipkart'
     elif 'bigbasket' in product_lower: prefix = 'bigbasket'
@@ -267,7 +265,7 @@ def cat_json(call):
         reply_markup=markup)
 
 # ============================================================
-# ===== USER SELECTION (NEW UI WITH CUSTOM) =====
+# ===== USER SELECTION (CUSTOM QUANTITY UI) =====
 # ============================================================
 user_selection = {}
 
@@ -307,7 +305,6 @@ def buy_product(call):
         "stock": stock
     }
 
-    # ✅ NEW UI: 1-5 + Custom
     markup = telebot.types.InlineKeyboardMarkup(row_width=5)
     
     row = []
@@ -318,7 +315,7 @@ def buy_product(call):
         markup.row(*row)
     
     if stock > 5:
-        markup.add(telebot.types.InlineKeyboardButton("✍️ Custom Quantity", callback_data=f"custom_qty_{index}"))
+        markup.add(telebot.types.InlineKeyboardButton("✍️ Custom Quantity", callback_data="custom_qty"))
         
     markup.add(
         telebot.types.InlineKeyboardButton("🔙 Back", callback_data="shop"),
@@ -336,7 +333,7 @@ def buy_product(call):
         reply_markup=markup)
 
 # ============================================================
-# ===== QUANTITY PROCESSING =====
+# ===== QUANTITY PROCESSING & VANISH FIX =====
 # ============================================================
 @bot.callback_query_handler(func=lambda call: call.data.startswith('qty_'))
 def quantity_selected(call):
@@ -346,9 +343,15 @@ def quantity_selected(call):
         bot.answer_callback_query(call.id, "❌ Session expired!", show_alert=True)
         return
 
-    process_order(call.message.chat.id, call.from_user.id, qty, call.message.message_id)
+    # ✅ VANISH FIX: Purana message turant delete karo
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        print(f"Delete error: {e}")
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('custom_qty_'))
+    process_order(call.message.chat.id, call.from_user.id, qty, None)
+
+@bot.callback_query_handler(func=lambda call: call.data == "custom_qty")
 def custom_quantity_prompt(call):
     if call.from_user.id not in user_selection:
         bot.answer_callback_query(call.id, "❌ Session expired! Try again.", show_alert=True)
@@ -357,6 +360,12 @@ def custom_quantity_prompt(call):
     selection = user_selection[call.from_user.id]
     product = selection['product']
     stock = selection['stock']
+    
+    # ✅ VANISH FIX: Purana message delete karo
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        print(f"Delete error: {e}")
     
     msg = bot.send_message(
         call.message.chat.id,
@@ -385,6 +394,12 @@ def process_custom_quantity(message):
     if qty < 1 or qty > stock:
         bot.reply_to(message, f"❌ Invalid! Quantity must be between 1 and {stock}.")
         return
+
+    # Custom qty wale user ka message delete karo
+    try:
+        bot.delete_message(message.chat.id, message.message_id)
+    except:
+        pass
 
     process_order(message.chat.id, message.from_user.id, qty, None)
 
@@ -474,7 +489,7 @@ def cancel_order(call):
     bot.answer_callback_query(call.id, "❌ Cancelled!")
 
 # ============================================================
-# ===== PAYMENT & ADMIN NOTIFY =====
+# ===== PAYMENT (VANISH FIXED) =====
 # ============================================================
 @bot.callback_query_handler(func=lambda call: call.data.startswith('paid_'))
 def payment_done(call):
@@ -494,6 +509,12 @@ def payment_done(call):
     if order_found['status'] == "delivered":
         bot.answer_callback_query(call.id, "✅ Already delivered!", show_alert=True)
         return
+
+    # ✅ VANISH FIX: Jab "I Have Paid" dabao toh Payment wala message delete ho jaye
+    try:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        print(f"Vanish error: {e}")
 
     bot.answer_callback_query(call.id, "📝 Send reference now!")
 
@@ -540,7 +561,7 @@ def process_reference(message, order_id):
             f"🟢 PAYMENT RECEIVED\n"
             f"━━━━━━━━━━━━━━\n\n"
             f"🆔 Order: {order_id}\n"
-            f"👤 User: {order_found.get('username', 'N/A')}\n"
+            f"👤 User: @{order_found.get('username', 'N/A')}\n"
             f"📦 Product: {order_found['product']}\n"
             f"🔢 Qty: {order_found['quantity']}\n"
             f"💰 Total: ₹{order_found['total']}\n"
@@ -615,7 +636,7 @@ def admin_approve(call):
             f"✅ COUPON DELIVERED\n"
             f"━━━━━━━━━━━━━━\n\n"
             f"🆔 Order: {order_id}\n"
-            f"👤 User: {order_found.get('username', 'N/A')}\n"
+            f"👤 User: @{order_found.get('username', 'N/A')}\n"
             f"📦 Product: {order_found['product']}\n"
             f"🔢 Qty: {qty}\n\n"
             f"🔑 Codes Delivered:\n{code_list}\n\n"
@@ -663,7 +684,7 @@ def admin_approve(call):
             f"✅ ORDER DELIVERED\n"
             f"━━━━━━━━━━━━━━\n\n"
             f"🆔 Order: {order_id}\n"
-            f"👤 User: {order_found.get('username', 'N/A')}\n"
+            f"👤 User: @{order_found.get('username', 'N/A')}\n"
             f"📦 Product: {order_found['product']}\n"
             f"🔢 Qty: {qty}\n\n"
             f"📱 Accounts Delivered:\n{item_list}\n\n"
@@ -681,7 +702,7 @@ def admin_approve(call):
                         bot.send_document(
                             ADMIN_ID,
                             f,
-                            caption=f"📄 Delivered to {order_found.get('username', 'N/A')}"
+                            caption=f"📄 Delivered to @{order_found.get('username', 'N/A')}"
                         )
                 except:
                     pass
