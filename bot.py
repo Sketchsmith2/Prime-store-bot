@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import telebot
 import json
+from telebot.types import BotCommand
 import os
 import random
 import string
@@ -161,13 +162,24 @@ def create_single_order_file(order, index=1):
 # ============================================================
 @bot.message_handler(commands=['start'])
 def start(message):
-    markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
+    # 1. Inline Buttons (Message ke andar)
+    inline_markup = telebot.types.InlineKeyboardMarkup(row_width=2)
+    inline_markup.add(
         telebot.types.InlineKeyboardButton("🛒 Shop Now", callback_data="shop"),
         telebot.types.InlineKeyboardButton("📦 My Orders", callback_data="my_orders"),
         telebot.types.InlineKeyboardButton("❓ Help", callback_data="help"),
         telebot.types.InlineKeyboardButton("📞 Support", callback_data="support")
     )
+
+    # 2. Reply Keyboard (Neeche wale buttons)
+    reply_markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    reply_markup.add(
+        telebot.types.KeyboardButton("🛒 Shop Now"),
+        telebot.types.KeyboardButton("📦 My Orders"),
+        telebot.types.KeyboardButton("❓ Help"),
+        telebot.types.KeyboardButton("📞 Support")
+    )
+
     bot.send_message(message.chat.id,
         f"✨ Welcome {message.from_user.first_name}!\n\n"
         "🏪 PRIME STORE\n"
@@ -177,7 +189,7 @@ def start(message):
         "📁 JSON Files\n\n"
         "💳 Secure Payments\n"
         "📞 Support: @Prime_Blogs",
-        reply_markup=markup)
+        reply_markup=inline_markup)
 
 # ============================================================
 # ===== SUPPORT & CATEGORIES =====
@@ -829,12 +841,46 @@ def keep_alive():
     t.daemon = True
     t.start()
 
+# ===== REPLY KEYBOARD BUTTONS LOGIC =====
+class FakeCall:
+    def __init__(self, message):
+        self.message = message
+        self.from_user = message.from_user
+        self.id = "123"
+    def answer_callback_query(self, *args, **kwargs): 
+        pass
+
+@bot.message_handler(func=lambda message: message.text == "🛒 Shop Now")
+def text_shop(message): shop(FakeCall(message))
+
+@bot.message_handler(func=lambda message: message.text == "📦 My Orders")
+def text_orders(message): my_orders(FakeCall(message))
+
+@bot.message_handler(func=lambda message: message.text == "❓ Help")
+def text_help(message): help_menu(FakeCall(message))
+
+@bot.message_handler(func=lambda message: message.text == "📞 Support")
+def text_support(message): support(FakeCall(message))
+
 # ============================================================
 # ===== START BOT =====
 # ============================================================
 if __name__ == "__main__":
     print("🚀 Prime Store Bot Starting...")
     keep_alive()
+
+    # ✅ Set Bot Commands automatically on startup
+    try:
+        bot.set_my_commands([
+            BotCommand("start", "🏠 Main Menu & Login"),
+            BotCommand("shop", "🛒 Open Store"),
+            BotCommand("my_orders", "📦 My Orders"),
+            BotCommand("help", "ℹ️ Help & Guide"),
+            BotCommand("support", "📞 Contact Support")
+        ])
+        print("✅ Bot commands set successfully!")
+    except Exception as e:
+        print(f"❌ Error setting commands: {e}")
 
     try:
         bot.infinity_polling(timeout=60, long_polling_timeout=30)
