@@ -16,7 +16,7 @@ import threading
 import pytz
 
 # ===== CONFIGURATION =====
-TOKEN = os.environ.get('BOT_TOKEN', "8931616308:AAHwwwjGhxxpM_6S00o1eBshSKT3aTC8iWM")
+TOKEN = os.environ.get('BOT_TOKEN', "8931616308:AAHcmCbzYPCuUR6Mci0N4DI6O8MsEPmiItM")
 ADMIN_ID = int(os.environ.get('ADMIN_ID', 939433537))
 CO_ADMIN_USERNAME = "Prime_Blogs"
 CO_ADMIN_CHAT_ID = 939433537
